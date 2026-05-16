@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
@@ -8,7 +9,7 @@ import '../../widgets/custom_text_field.dart';
 import 'register_page.dart';
 import 'role_selection_page.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   final UserRole selectedRole;
 
   const LoginPage({
@@ -17,7 +18,106 @@ class LoginPage extends StatelessWidget {
   });
 
   @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('Veuillez remplir tous les champs.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      AppNavigator.openDashboard(context, widget.selectedRole);
+    } on FirebaseAuthException catch (e) {
+      String message = 'Erreur de connexion.';
+
+      if (e.code == 'user-not-found') {
+        message = 'Aucun compte trouvé avec cet email.';
+      } else if (e.code == 'wrong-password') {
+        message = 'Mot de passe incorrect.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Adresse email invalide.';
+      } else if (e.code == 'invalid-credential') {
+        message = 'Email ou mot de passe incorrect.';
+      } else if (e.code == 'user-disabled') {
+        message = 'Ce compte a été désactivé.';
+      }
+
+      _showMessage(message);
+    } catch (_) {
+      _showMessage('Erreur inconnue. Réessayez.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      _showMessage('Entrez votre email avant de réinitialiser le mot de passe.');
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      _showMessage('Email de réinitialisation envoyé.');
+    } on FirebaseAuthException catch (e) {
+      String message = 'Impossible d’envoyer l’email.';
+
+      if (e.code == 'invalid-email') {
+        message = 'Adresse email invalide.';
+      } else if (e.code == 'user-not-found') {
+        message = 'Aucun compte trouvé avec cet email.';
+      }
+
+      _showMessage(message);
+    } catch (_) {
+      _showMessage('Erreur inconnue. Réessayez.');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final selectedRole = widget.selectedRole;
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -37,21 +137,23 @@ class LoginPage extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               const Text(
-                'La structure est déjà prête pour les 3 rôles. Tu pourras brancher ton backend plus tard sans casser les écrans.',
+                'Connecte-toi avec ton email et ton mot de passe pour accéder à ton espace.',
                 style: TextStyle(
                   height: 1.5,
                   color: AppColors.mutedText,
                 ),
               ),
               const SizedBox(height: 26),
-              const CustomTextField(
+              CustomTextField(
+                controller: _emailController,
                 label: 'Email',
                 hintText: 'nom@academy.com',
                 prefixIcon: Icons.mail_outline_rounded,
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
-              const CustomTextField(
+              CustomTextField(
+                controller: _passwordController,
                 label: 'Mot de passe',
                 hintText: '••••••••',
                 prefixIcon: Icons.lock_outline_rounded,
@@ -61,29 +163,27 @@ class LoginPage extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Ajoute ici la logique mot de passe oublié.'),
-                      ),
-                    );
-                  },
+                  onPressed: _isLoading ? null : _resetPassword,
                   child: const Text('Mot de passe oublié ?'),
                 ),
               ),
               const SizedBox(height: 10),
               CustomButton(
-                label: 'Accéder au tableau de bord',
+                label: _isLoading ? 'Connexion...' : 'Accéder au tableau de bord',
                 icon: Icons.arrow_forward_rounded,
-                onPressed: () => AppNavigator.openDashboard(context, selectedRole),
+                onPressed: _isLoading ? null : _login,
               ),
               const SizedBox(height: 12),
               CustomButton(
                 label: 'Changer de rôle',
                 outlined: true,
-                onPressed: () {
+                onPressed: _isLoading
+                    ? null
+                    : () {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const RoleSelectionPage()),
+                    MaterialPageRoute(
+                      builder: (_) => const RoleSelectionPage(),
+                    ),
                   );
                 },
               ),
@@ -97,10 +197,14 @@ class LoginPage extends StatelessWidget {
                       style: TextStyle(color: AppColors.mutedText),
                     ),
                     TextButton(
-                      onPressed: () {
+                      onPressed: _isLoading
+                          ? null
+                          : () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => RegisterPage(selectedRole: selectedRole),
+                            builder: (_) => RegisterPage(
+                              selectedRole: selectedRole,
+                            ),
                           ),
                         );
                       },
