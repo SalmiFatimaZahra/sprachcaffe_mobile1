@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -37,6 +38,17 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  String _roleToString(UserRole role) {
+    switch (role) {
+      case UserRole.student:
+        return 'student';
+      case UserRole.teacher:
+        return 'teacher';
+      case UserRole.admin:
+        return 'admin';
+    }
+  }
+
   Future<void> _createAccount() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -61,12 +73,29 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
 
     try {
-      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final userCredential =
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      await userCredential.user?.updateDisplayName(name);
+      final user = userCredential.user;
+
+      if (user == null) {
+        _showMessage('Impossible de créer l’utilisateur.');
+        return;
+      }
+
+      await user.updateDisplayName(name);
+      const role = 'student';
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'name': name,
+        'email': email,
+        'role': role,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       if (!mounted) return;
 
@@ -87,8 +116,8 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       _showMessage(message);
-    } catch (_) {
-      _showMessage('Erreur inconnue. Réessayez.');
+    } catch (e) {
+      _showMessage('Erreur: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

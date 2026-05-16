@@ -65,4 +65,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'sprachcaffe-mobile.firebasestorage.app',
     iosBundleId: 'com.example.sprachcaffeMobile1',
   );
+
 }

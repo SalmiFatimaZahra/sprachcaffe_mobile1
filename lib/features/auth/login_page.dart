@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_navigator.dart';
 import '../../core/user_role.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'register_page.dart';
-import 'role_selection_page.dart';
+
 
 class LoginPage extends StatefulWidget {
   final UserRole selectedRole;
@@ -25,6 +26,8 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  final AuthService _authService = AuthService();
+
   bool _isLoading = false;
 
   @override
@@ -32,6 +35,19 @@ class _LoginPageState extends State<LoginPage> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  UserRole? _roleFromString(String role) {
+    switch (role) {
+      case 'student':
+        return UserRole.student;
+      case 'teacher':
+        return UserRole.teacher;
+      case 'admin':
+        return UserRole.admin;
+      default:
+        return null;
+    }
   }
 
   Future<void> _login() async {
@@ -46,14 +62,35 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCredential = await _authService.login(
         email: email,
         password: password,
       );
 
+      final uid = userCredential.user?.uid;
+
+      if (uid == null) {
+        _showMessage('Impossible de récupérer l’utilisateur.');
+        return;
+      }
+
+      final roleString = await _authService.getUserRole(uid);
+
+      if (roleString == null) {
+        _showMessage('Aucun rôle trouvé pour cet utilisateur.');
+        return;
+      }
+
+      final userRole = _roleFromString(roleString);
+
+      if (userRole == null) {
+        _showMessage('Rôle invalide dans la base de données.');
+        return;
+      }
+
       if (!mounted) return;
 
-      AppNavigator.openDashboard(context, widget.selectedRole);
+      AppNavigator.openDashboard(context, userRole);
     } on FirebaseAuthException catch (e) {
       String message = 'Erreur de connexion.';
 
@@ -70,7 +107,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       _showMessage(message);
-    } catch (_) {
+    } catch (e) {
       _showMessage('Erreur inconnue. Réessayez.');
     } finally {
       if (mounted) {
@@ -128,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
               _AuthTopBar(selectedRole: selectedRole),
               const SizedBox(height: 24),
               Text(
-                'Connexion ${selectedRole.label.toLowerCase()}',
+                'Connexion',
                 style: const TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w800,
@@ -137,7 +174,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'Connecte-toi avec ton email et ton mot de passe pour accéder à ton espace.',
+                'Connecte-vous avec votre email et votre mot de passe.',
                 style: TextStyle(
                   height: 1.5,
                   color: AppColors.mutedText,
@@ -169,24 +206,14 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 10),
               CustomButton(
-                label: _isLoading ? 'Connexion...' : 'Accéder au tableau de bord',
+                label: _isLoading
+                    ? 'Connexion...'
+                    : 'Accéder au tableau de bord',
                 icon: Icons.arrow_forward_rounded,
                 onPressed: _isLoading ? null : _login,
               ),
               const SizedBox(height: 12),
-              CustomButton(
-                label: 'Changer de rôle',
-                outlined: true,
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const RoleSelectionPage(),
-                    ),
-                  );
-                },
-              ),
+
               const SizedBox(height: 24),
               Center(
                 child: Wrap(
