@@ -22,7 +22,6 @@ class StudentHomePage extends StatelessWidget {
     required this.onOpenCourseDetails,
   });
 
-  // 🔥 LOGOUT
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
 
@@ -39,10 +38,7 @@ class StudentHomePage extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection("users")
-          .doc(uid)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection("users").doc(uid).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(
@@ -54,6 +50,7 @@ class StudentHomePage extends StatelessWidget {
 
         final name = data["name"] ?? "Étudiant";
         final level = data["level"] ?? "A0";
+        final language = data["language"] ?? "Français";
         final coursesCount = data["coursesCount"] ?? 0;
         final attendance = data["attendance"] ?? 0;
 
@@ -62,88 +59,192 @@ class StudentHomePage extends StatelessWidget {
             child: Column(
               children: [
 
-                // 🔥 HEADER
+                /// 🔥 HEADER
                 PremiumHeader(
                   badge: 'Espace étudiant',
                   title: 'Bonjour $name 👋',
-                  subtitle:
-                  'Retrouve tes cours et ton évolution personnalisée.',
+                  subtitle: 'Ton apprentissage personnalisé continue ici.',
                   icon: Icons.school_rounded,
-                  bottom: Row(
+                  bottom: Column(
                     children: [
-                      Expanded(
-                        child: _HeaderMiniStat(
-                          value: level,
-                          label: 'Niveau',
-                        ),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _HeaderMiniStat(value: level, label: 'Niveau'),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _HeaderMiniStat(value: '$coursesCount', label: 'Cours'),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _HeaderMiniStat(value: '$attendance%', label: 'Assiduité'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _HeaderMiniStat(
-                          value: '$coursesCount',
-                          label: 'Cours',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _HeaderMiniStat(
-                          value: '$attendance%',
-                          label: 'Assiduité',
+
+                      const SizedBox(height: 14),
+
+                      /// 🔥 LOGOUT BUTTON
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Material(
+                          color: Colors.red.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            onTap: () => _logout(context),
+                            borderRadius: BorderRadius.circular(16),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.logout, color: Colors.white, size: 18),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    "Déconnexion",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // 🔥 LOGOUT BUTTON
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 20, top: 10),
-                    child: TextButton.icon(
-                      onPressed: () => _logout(context),
-                      icon: const Icon(Icons.logout, color: Colors.red),
-                      label: const Text(
-                        "Déconnexion",
-                        style: TextStyle(color: Colors.red),
+                const SizedBox(height: 20),
+
+                /// 🔥 TEST DE NIVEAU
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: InkWell(
+                    onTap: onOpenLevelTest,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.primary, AppColors.dark],
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Row(
+                        children: [
+
+                          const Icon(
+                            Icons.quiz_rounded,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+
+                          const SizedBox(width: 16),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Test de niveau $language",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  "Évalue ton niveau automatiquement",
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
+                const SizedBox(height: 28),
+
+                /// 🔥 CONTENT
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
                       const SectionTitle('Vue rapide'),
+
                       const SizedBox(height: 14),
 
                       DashboardCard(
                         value: "Mercredi 18:30",
                         title: "Prochain cours",
-                        subtitle: "Anglais professionnel",
+                        subtitle: "Cours personnalisé",
                         icon: Icons.schedule_rounded,
                       ),
 
                       const SizedBox(height: 12),
 
                       DashboardCard(
-                        value: "Progression",
+                        value: "En progression",
                         title: "Suivi",
-                        subtitle: "Ton apprentissage est en cours",
+                        subtitle: "Ton apprentissage évolue chaque semaine",
                         icon: Icons.trending_up_rounded,
                       ),
 
                       const SizedBox(height: 28),
 
-                      SectionTitle(
-                        'Cours recommandés',
-                        actionLabel: 'Voir tout',
-                        onAction: () =>
-                            onOpenCourseDetails('Français conversation'),
+                      /// 🔥 ACTIONS
+                      const SectionTitle('Actions rapides'),
+
+                      const SizedBox(height: 14),
+
+                      Row(
+                        children: [
+
+                          Expanded(
+                            child: _QuickActionCard(
+                              icon: Icons.smart_toy_rounded,
+                              title: 'Chatbot',
+                              subtitle: 'Assistant IA',
+                              onTap: onOpenChatbot,
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child: _QuickActionCard(
+                              icon: Icons.menu_book_rounded,
+                              title: 'Cours',
+                              subtitle: 'Voir mes formations',
+                              onTap: () => onOpenCourseDetails(),
+                            ),
+                          ),
+                        ],
                       ),
+
+                      const SizedBox(height: 28),
+
+                      /// 🔥 COURS
+                      const SectionTitle('Cours recommandés'),
 
                       const SizedBox(height: 14),
 
@@ -153,8 +254,7 @@ class StudentHomePage extends StatelessWidget {
                         badge: 'En cours',
                         schedule: 'Lundi & mercredi',
                         icon: Icons.business_center_rounded,
-                        onTap: () =>
-                            onOpenCourseDetails('Anglais professionnel'),
+                        onTap: () => onOpenCourseDetails('Anglais professionnel'),
                       ),
 
                       const SizedBox(height: 12),
@@ -165,8 +265,7 @@ class StudentHomePage extends StatelessWidget {
                         badge: 'Recommandé',
                         schedule: 'Samedi',
                         icon: Icons.record_voice_over_rounded,
-                        onTap: () =>
-                            onOpenCourseDetails('Français conversation'),
+                        onTap: () => onOpenCourseDetails('Français conversation'),
                       ),
                     ],
                   ),
@@ -180,6 +279,10 @@ class StudentHomePage extends StatelessWidget {
   }
 }
 
+/// =====================
+/// WIDGETS UI
+/// =====================
+
 class _HeaderMiniStat extends StatelessWidget {
   final String value;
   final String label;
@@ -191,32 +294,69 @@ class _HeaderMiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-            ),
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.80),
-              fontWeight: FontWeight.w500,
-            ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.8),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primarySoft,
+                child: Icon(icon, color: AppColors.dark),
+              ),
+              const SizedBox(height: 12),
+              Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(subtitle,
+                  style: const TextStyle(color: AppColors.mutedText)),
+            ],
+          ),
+        ),
       ),
     );
   }

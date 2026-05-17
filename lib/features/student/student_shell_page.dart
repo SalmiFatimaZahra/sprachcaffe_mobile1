@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
@@ -20,6 +22,40 @@ class StudentShellPage extends StatefulWidget {
 class _StudentShellPageState extends State<StudentShellPage> {
   int _currentIndex = 0;
 
+  String language = "Français";
+  bool isLoadingLanguage = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadUserLanguage();
+  }
+
+  Future<void> loadUserLanguage() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
+          .get();
+
+      final data = doc.data();
+
+      if (data != null) {
+        setState(() {
+          language = data["language"] ?? "Français";
+          isLoadingLanguage = false;
+        });
+      } else {
+        setState(() => isLoadingLanguage = false);
+      }
+    } catch (e) {
+      debugPrint(e.toString());
+      setState(() => isLoadingLanguage = false);
+    }
+  }
+
   void _openCourseDetails([String title = 'Anglais professionnel']) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -29,14 +65,25 @@ class _StudentShellPageState extends State<StudentShellPage> {
   }
 
   void _openLevelTest() {
+    if (isLoadingLanguage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Chargement de la langue...")),
+      );
+      return;
+    }
+
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const StudentLevelTestPage()),
+      MaterialPageRoute(
+        builder: (_) => StudentLevelTestPage(language: language),
+      ),
     );
   }
 
   void _openChatbot() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const StudentChatbotPage()),
+      MaterialPageRoute(
+        builder: (_) => const StudentChatbotPage(),
+      ),
     );
   }
 
@@ -48,14 +95,21 @@ class _StudentShellPageState extends State<StudentShellPage> {
           onOpenLevelTest: _openLevelTest,
           onOpenChatbot: _openChatbot,
         );
+
       case 1:
-        return StudentCoursesPage(onOpenCourseDetails: _openCourseDetails);
+        return StudentCoursesPage(
+          onOpenCourseDetails: _openCourseDetails,
+        );
+
       case 2:
         return const StudentPlanningPage();
+
       case 3:
         return const StudentResourcesPage();
+
       case 4:
         return const StudentProfilePage();
+
       default:
         return const SizedBox.shrink();
     }
@@ -64,7 +118,10 @@ class _StudentShellPageState extends State<StudentShellPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(top: true, bottom: false, child: _buildCurrentPage()),
+      body: SafeArea(
+        child: _buildCurrentPage(),
+      ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openChatbot,
         backgroundColor: AppColors.primary,
@@ -75,9 +132,14 @@ class _StudentShellPageState extends State<StudentShellPage> {
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
+
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
