@@ -1,10 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../core/app_navigator.dart';
 import '../../core/user_role.dart';
 import '../../services/auth_service.dart';
-import 'login_page.dart';
+import '../auth/login_page.dart';
+import '../student/student_register_page.dart';
+import '../student/payment_page.dart';
+import '../../core/app_navigator.dart';
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
@@ -16,48 +19,56 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   final AuthService _authService = AuthService();
 
-  UserRole? _roleFromString(String role) {
+  UserRole _roleFromString(String role) {
     switch (role) {
       case 'student':
         return UserRole.student;
       case 'teacher':
         return UserRole.teacher;
-      case 'admin':
-        return UserRole.admin;
       default:
-        return null;
+        return UserRole.admin;
     }
   }
 
-  Future<void> _redirectUser(User user) async {
-    final roleString = await _authService.getUserRole(user.uid);
+  Future<void> _handleUser(User user) async {
+    final doc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(user.uid)
+        .get();
+
+    if (!doc.exists) {
+      await FirebaseAuth.instance.signOut();
+      return;
+    }
+
+    final data = doc.data()!;
+
+    final role = _roleFromString(data["role"]);
+    final profileCompleted = data["profileCompleted"] ?? false;
+    final isPaid = data["isPaid"] ?? false;
 
     if (!mounted) return;
 
-    if (roleString == null) {
-      await FirebaseAuth.instance.signOut();
+    // 🟡 STUDENT FLOW
+    if (role == UserRole.student) {
+      if (!profileCompleted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const StudentRegisterPage()),
+        );
+        return;
+      }
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const LoginPage(selectedRole: UserRole.student),
-        ),
-      );
-      return;
+      if (!isPaid) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PaymentPage()),
+        );
+        return;
+      }
     }
 
-    final role = _roleFromString(roleString);
-
-    if (role == null) {
-      await FirebaseAuth.instance.signOut();
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const LoginPage(selectedRole: UserRole.student),
-        ),
-      );
-      return;
-    }
-
+    // 🟢 FINAL DASHBOARD
     AppNavigator.openDashboard(context, role);
   }
 
@@ -68,9 +79,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -80,12 +89,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
           return const LoginPage(selectedRole: UserRole.student);
         }
 
-        Future.microtask(() => _redirectUser(user));
+        Future.microtask(() => _handleUser(user));
 
         return const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
+          body: Center(child: CircularProgressIndicator()),
         );
       },
     );

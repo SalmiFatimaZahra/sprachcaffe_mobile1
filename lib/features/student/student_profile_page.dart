@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
@@ -12,51 +14,90 @@ class StudentProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PremiumHeader(
-            badge: 'Profil',
-            title: 'Mon compte étudiant',
-            subtitle: 'Centralise ici les informations personnelles, préférences et paramètres de suivi.',
-            icon: Icons.person_rounded,
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionTitle('Informations'),
-                const SizedBox(height: 14),
-                _infoCard(),
-                const SizedBox(height: 28),
-                const SectionTitle('Préférences'),
-                const SizedBox(height: 14),
-                _preferencesCard(),
-                const SizedBox(height: 24),
-                CustomButton(
-                  label: 'Se déconnecter',
-                  outlined: true,
-                  onPressed: () {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (_) => const LoginPage(
-                          selectedRole: UserRole.student,
-                        ),
-                      ),
-                      (route) => false,
-                    );
-                  },
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+
+        final name = data["name"] ?? "Étudiant";
+        final email = data["email"] ?? "";
+        final level = data["level"] ?? "A0";
+        final course = data["course"] ?? "Non défini";
+
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+
+              PremiumHeader(
+                badge: 'Profil',
+                title: 'Mon compte étudiant',
+                subtitle:
+                'Gère tes informations personnelles et ton apprentissage.',
+                icon: Icons.person_rounded,
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+
+                    const SectionTitle('Informations'),
+                    const SizedBox(height: 14),
+
+                    _infoCard(name, email, level, course),
+
+                    const SizedBox(height: 28),
+
+                    const SectionTitle('Préférences'),
+                    const SizedBox(height: 14),
+
+                    _preferencesCard(),
+
+                    const SizedBox(height: 24),
+
+                    CustomButton(
+                      label: 'Se déconnecter',
+                      outlined: true,
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (_) => const LoginPage(
+                              selectedRole: UserRole.student,
+                            ),
+                          ),
+                              (route) => false,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _infoCard() {
+  Widget _infoCard(
+      String name,
+      String email,
+      String level,
+      String course,
+      ) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -64,15 +105,15 @@ class StudentProfilePage extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          _ProfileLine(label: 'Nom', value: 'Sara Benali'),
-          SizedBox(height: 14),
-          _ProfileLine(label: 'Email', value: 'sara@academy.com'),
-          SizedBox(height: 14),
-          _ProfileLine(label: 'Niveau actuel', value: 'B1'),
-          SizedBox(height: 14),
-          _ProfileLine(label: 'Parcours', value: 'Anglais professionnel'),
+          _ProfileLine(label: 'Nom', value: name),
+          const SizedBox(height: 14),
+          _ProfileLine(label: 'Email', value: email),
+          const SizedBox(height: 14),
+          _ProfileLine(label: 'Niveau', value: level),
+          const SizedBox(height: 14),
+          _ProfileLine(label: 'Cours', value: course),
         ],
       ),
     );
