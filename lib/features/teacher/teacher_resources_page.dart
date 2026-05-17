@@ -1,30 +1,29 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_colors.dart';
 import '../../services/course_service.dart';
-import '../../services/session_service.dart';
+import '../../services/resource_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/premium_header.dart';
 import '../../widgets/section_title.dart';
 
-class TeacherPlanningPage extends StatefulWidget {
-  const TeacherPlanningPage({super.key});
+class TeacherResourcesPage extends StatefulWidget {
+  const TeacherResourcesPage({super.key});
 
   @override
-  State<TeacherPlanningPage> createState() => _TeacherPlanningPageState();
+  State<TeacherResourcesPage> createState() => _TeacherResourcesPageState();
 }
 
-class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
-  final SessionService _sessionService = SessionService();
+class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
+  final ResourceService _resourceService = ResourceService();
   final CourseService _courseService = CourseService();
 
-  Future<void> _showAddSessionDialog() async {
-    final groupController = TextEditingController();
-    final dateController = TextEditingController();
-    final timeController = TextEditingController();
-    final roomController = TextEditingController();
+  Future<void> _showAddResourceDialog() async {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
 
     String? selectedCourseId;
     String? selectedCourseTitle;
@@ -41,7 +40,7 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                 borderRadius: BorderRadius.circular(24),
               ),
               title: const Text(
-                'Ajouter une séance',
+                'Déposer un document',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   color: AppColors.dark,
@@ -149,31 +148,47 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                     ),
                     const SizedBox(height: 14),
                     CustomTextField(
-                      controller: groupController,
-                      label: 'Groupe',
-                      hintText: 'Ex. Groupe A',
-                      prefixIcon: Icons.groups_rounded,
+                      controller: titleController,
+                      label: 'Titre',
+                      hintText: 'Ex. Cours 1 - Introduction',
+                      prefixIcon: Icons.title_rounded,
                     ),
                     const SizedBox(height: 14),
                     CustomTextField(
-                      controller: dateController,
-                      label: 'Date',
-                      hintText: 'Ex. 2026-05-20',
-                      prefixIcon: Icons.calendar_today_rounded,
+                      controller: descriptionController,
+                      label: 'Description',
+                      hintText: 'Décris le contenu du document',
+                      prefixIcon: Icons.description_rounded,
+                      maxLines: 3,
                     ),
                     const SizedBox(height: 14),
-                    CustomTextField(
-                      controller: timeController,
-                      label: 'Horaire',
-                      hintText: 'Ex. 18:30 - 20:00',
-                      prefixIcon: Icons.access_time_rounded,
-                    ),
-                    const SizedBox(height: 14),
-                    CustomTextField(
-                      controller: roomController,
-                      label: 'Salle',
-                      hintText: 'Ex. Salle 204',
-                      prefixIcon: Icons.meeting_room_rounded,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.picture_as_pdf_rounded,
+                            color: AppColors.dark,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Après avoir cliqué sur Ajouter, le sélecteur de fichiers PDF va s’ouvrir.',
+                              style: TextStyle(
+                                height: 1.4,
+                                color: AppColors.mutedText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -191,17 +206,14 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                   onPressed: isLoading
                       ? null
                       : () async {
-                    final group = groupController.text.trim();
-                    final date = dateController.text.trim();
-                    final time = timeController.text.trim();
-                    final room = roomController.text.trim();
+                    final title = titleController.text.trim();
+                    final description =
+                    descriptionController.text.trim();
 
                     if (selectedCourseId == null ||
                         selectedCourseTitle == null ||
-                        group.isEmpty ||
-                        date.isEmpty ||
-                        time.isEmpty ||
-                        room.isEmpty) {
+                        title.isEmpty ||
+                        description.isEmpty) {
                       ScaffoldMessenger.of(dialogContext).showSnackBar(
                         const SnackBar(
                           content: Text(
@@ -213,16 +225,22 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                       return;
                     }
 
+                    FocusScope.of(dialogContext).unfocus();
+
+                    await Future.delayed(
+                      const Duration(milliseconds: 600),
+                    );
+
+                    if (!dialogContext.mounted) return;
+
                     setDialogState(() => isLoading = true);
 
                     try {
-                      await _sessionService.addSession(
+                      await _resourceService.addPdfResource(
                         courseId: selectedCourseId!,
                         courseTitle: selectedCourseTitle!,
-                        groupName: group,
-                        date: date,
-                        time: time,
-                        room: room,
+                        title: title,
+                        description: description,
                       );
 
                       if (dialogContext.mounted) {
@@ -241,8 +259,8 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                       }
                     }
                   },
-                  icon: const Icon(Icons.check_rounded),
-                  label: Text(isLoading ? 'Ajout...' : 'Ajouter'),
+                  icon: const Icon(Icons.upload_file_rounded),
+                  label: Text(isLoading ? 'Envoi...' : 'Ajouter'),
                 ),
               ],
             );
@@ -256,7 +274,25 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
     if (added == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Séance ajoutée avec succès.'),
+          content: Text('Document ajouté avec succès.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openResource(String url) async {
+    final uri = Uri.parse(url);
+
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible d’ouvrir le document.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -269,11 +305,11 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
       child: Column(
         children: [
           const PremiumHeader(
-            badge: 'Planning',
-            title: 'Mes séances',
+            badge: 'Ressources',
+            title: 'Documents de cours',
             subtitle:
-            'Ajoute et consulte tes séances liées à tes cours existants.',
-            icon: Icons.calendar_month_rounded,
+            'Dépose des PDF et supports pédagogiques pour tes étudiants.',
+            icon: Icons.folder_copy_rounded,
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 110),
@@ -281,15 +317,15 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CustomButton(
-                  label: 'Ajouter une séance',
-                  icon: Icons.add_rounded,
-                  onPressed: _showAddSessionDialog,
+                  label: 'Déposer un PDF',
+                  icon: Icons.upload_file_rounded,
+                  onPressed: _showAddResourceDialog,
                 ),
                 const SizedBox(height: 24),
-                const SectionTitle('Séances programmées'),
+                const SectionTitle('Mes ressources'),
                 const SizedBox(height: 14),
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: _sessionService.getMySessions(),
+                  stream: _resourceService.getMyResources(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
@@ -301,7 +337,7 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                     }
 
                     if (snapshot.hasError) {
-                      return _EmptySessionsBox(
+                      return _EmptyResourcesBox(
                         title: 'Erreur de chargement',
                         subtitle: snapshot.error.toString(),
                         icon: Icons.error_outline_rounded,
@@ -311,11 +347,11 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                     final docs = snapshot.data?.docs ?? [];
 
                     if (docs.isEmpty) {
-                      return const _EmptySessionsBox(
-                        title: 'Aucune séance pour le moment',
+                      return const _EmptyResourcesBox(
+                        title: 'Aucune ressource pour le moment',
                         subtitle:
-                        'Clique sur “Ajouter une séance” pour programmer ton premier cours.',
-                        icon: Icons.event_busy_rounded,
+                        'Clique sur “Déposer un PDF” pour ajouter un support de cours.',
+                        icon: Icons.folder_off_rounded,
                       );
                     }
 
@@ -327,13 +363,21 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
                       itemBuilder: (context, index) {
                         final data = docs[index].data();
 
-                        return _SessionCard(
-                          course: data['courseTitle'] ?? 'Cours sans titre',
-                          group: data['groupName'] ?? 'Groupe non défini',
-                          date: data['date'] ?? 'Date non définie',
-                          time: data['time'] ?? 'Horaire non défini',
-                          room: data['room'] ?? 'Salle non définie',
-                          status: data['status'] ?? 'upcoming',
+                        return _ResourceCard(
+                          title: data['title'] ?? 'Sans titre',
+                          description:
+                          data['description'] ?? 'Aucune description',
+                          courseTitle:
+                          data['courseTitle'] ?? 'Cours non défini',
+                          fileName: data['fileName'] ?? 'document.pdf',
+                          fileUrl: data['fileUrl'] ?? '',
+                          onOpen: () {
+                            final url = data['fileUrl'] ?? '';
+
+                            if (url.isNotEmpty) {
+                              _openResource(url);
+                            }
+                          },
                         );
                       },
                     );
@@ -348,12 +392,12 @@ class _TeacherPlanningPageState extends State<TeacherPlanningPage> {
   }
 }
 
-class _EmptySessionsBox extends StatelessWidget {
+class _EmptyResourcesBox extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
 
-  const _EmptySessionsBox({
+  const _EmptyResourcesBox({
     required this.title,
     required this.subtitle,
     required this.icon,
@@ -403,31 +447,22 @@ class _EmptySessionsBox extends StatelessWidget {
   }
 }
 
-class _SessionCard extends StatelessWidget {
-  final String course;
-  final String group;
-  final String date;
-  final String time;
-  final String room;
-  final String status;
+class _ResourceCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final String courseTitle;
+  final String fileName;
+  final String fileUrl;
+  final VoidCallback onOpen;
 
-  const _SessionCard({
-    required this.course,
-    required this.group,
-    required this.date,
-    required this.time,
-    required this.room,
-    required this.status,
+  const _ResourceCard({
+    required this.title,
+    required this.description,
+    required this.courseTitle,
+    required this.fileName,
+    required this.fileUrl,
+    required this.onOpen,
   });
-
-  String get statusLabel {
-    if (status == 'done') return 'Terminée';
-    if (status == 'today') return 'Aujourd’hui';
-    return 'À venir';
-  }
-
-  bool get isToday => status == 'today';
-  bool get isDone => status == 'done';
 
   @override
   Widget build(BuildContext context) {
@@ -446,18 +481,15 @@ class _SessionCard extends StatelessWidget {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                height: 54,
-                width: 54,
-                decoration: BoxDecoration(
-                  color: isToday ? AppColors.primary : AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(18),
-                ),
+              CircleAvatar(
+                radius: 25,
+                backgroundColor: AppColors.primarySoft,
                 child: const Icon(
-                  Icons.event_note_rounded,
+                  Icons.picture_as_pdf_rounded,
                   color: AppColors.dark,
                 ),
               ),
@@ -467,115 +499,71 @@ class _SessionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      course,
+                      title,
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
                         color: AppColors.dark,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
                       ),
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      group,
+                      courseTitle,
                       style: const TextStyle(
                         color: AppColors.mutedText,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              _StatusBadge(
-                label: statusLabel,
-                isToday: isToday,
-                isDone: isDone,
-              ),
             ],
           ),
-          const SizedBox(height: 18),
-          _InfoLine(
-            icon: Icons.calendar_today_rounded,
-            label: date,
+          const SizedBox(height: 16),
+          Text(
+            description,
+            style: const TextStyle(
+              height: 1.45,
+              color: AppColors.mutedText,
+            ),
           ),
-          const SizedBox(height: 10),
-          _InfoLine(
-            icon: Icons.access_time_rounded,
-            label: time,
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.attach_file_rounded,
+                  size: 20,
+                  color: AppColors.dark,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    fileName,
+                    style: const TextStyle(
+                      color: AppColors.dark,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          _InfoLine(
-            icon: Icons.meeting_room_rounded,
-            label: room,
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Ouvrir le PDF'),
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _InfoLine extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _InfoLine({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 18,
-          color: AppColors.mutedText,
-        ),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.dark,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final String label;
-  final bool isToday;
-  final bool isDone;
-
-  const _StatusBadge({
-    required this.label,
-    required this.isToday,
-    required this.isDone,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 7,
-      ),
-      decoration: BoxDecoration(
-        color: isToday
-            ? AppColors.primary
-            : isDone
-            ? AppColors.background
-            : AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-          color: AppColors.dark,
-        ),
       ),
     );
   }

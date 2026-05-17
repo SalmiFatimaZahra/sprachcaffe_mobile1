@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../services/course_service.dart';
 import '../../services/session_service.dart';
+import '../../services/student_service.dart';
 import '../../widgets/dashboard_card.dart';
 import '../../widgets/premium_header.dart';
 import '../../widgets/section_title.dart';
@@ -18,6 +19,7 @@ class TeacherHomePage extends StatefulWidget {
 class _TeacherHomePageState extends State<TeacherHomePage> {
   final CourseService _courseService = CourseService();
   final SessionService _sessionService = SessionService();
+  final StudentService _studentService = StudentService();
 
   late Future<Map<String, int>> _statsFuture;
 
@@ -30,10 +32,12 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   Future<Map<String, int>> _loadStats() async {
     final coursesCount = await _courseService.getMyCoursesCount();
     final sessionsCount = await _sessionService.getMySessionsCount();
+    final studentsCount = await _studentService.getMyStudentsCount();
 
     return {
       'courses': coursesCount,
       'sessions': sessionsCount,
+      'students': studentsCount,
     };
   }
 
@@ -50,9 +54,8 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
     final name = user?.displayName;
     final email = user?.email ?? '';
 
-    final displayName = name == null || name.isEmpty
-        ? 'Professeur'
-        : name.split(' ').first;
+    final displayName =
+    name == null || name.isEmpty ? 'Professeur' : name.split(' ').first;
 
     return RefreshIndicator(
       onRefresh: _refreshStats,
@@ -62,7 +65,7 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
           children: [
             PremiumHeader(
               badge: 'Espace enseignant',
-              title: 'Bonjour $displayName 👋',
+              title: 'Bonjour $displayName ',
               subtitle:
               'Pilote tes cours, ton planning et le suivi de tes étudiants depuis un seul espace.',
               icon: Icons.co_present_rounded,
@@ -74,7 +77,6 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
                 children: [
                   const SectionTitle('Vue rapide'),
                   const SizedBox(height: 14),
-
                   FutureBuilder<Map<String, int>>(
                     future: _statsFuture,
                     builder: (context, snapshot) {
@@ -95,13 +97,16 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
                         );
                       }
 
-                      final stats = snapshot.data ?? {
-                        'courses': 0,
-                        'sessions': 0,
-                      };
+                      final stats = snapshot.data ??
+                          {
+                            'courses': 0,
+                            'sessions': 0,
+                            'students': 0,
+                          };
 
                       final coursesCount = stats['courses'] ?? 0;
                       final sessionsCount = stats['sessions'] ?? 0;
+                      final studentsCount = stats['students'] ?? 0;
 
                       return Column(
                         children: [
@@ -121,33 +126,29 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
                             icon: Icons.event_available_rounded,
                           ),
                           const SizedBox(height: 12),
-                          const DashboardCard(
-                            value: '0',
+                          DashboardCard(
+                            value: '$studentsCount',
                             title: 'Étudiants suivis',
                             subtitle:
-                            'Cette statistique sera connectée après aux inscriptions.',
+                            'Étudiants associés à ton espace professeur.',
                             icon: Icons.groups_rounded,
                           ),
                         ],
                       );
                     },
                   ),
-
                   const SizedBox(height: 28),
                   const SectionTitle('Prochaine étape'),
                   const SizedBox(height: 14),
-
                   const _InfoBox(
                     icon: Icons.auto_awesome_rounded,
                     title: 'Ton espace professeur est connecté',
                     subtitle:
-                    'Les cours et les séances sont maintenant lus depuis Firestore. La prochaine étape sera de connecter les étudiants aux cours.',
+                    'Les cours, les séances et les étudiants sont maintenant lus depuis Firestore.',
                   ),
-
                   const SizedBox(height: 28),
                   const SectionTitle('Actions rapides'),
                   const SizedBox(height: 14),
-
                   GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
@@ -174,11 +175,9 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 28),
                   const SectionTitle('Compte connecté'),
                   const SizedBox(height: 14),
-
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),

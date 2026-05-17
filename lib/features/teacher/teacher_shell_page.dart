@@ -4,6 +4,7 @@ import 'teacher_courses_page.dart';
 import 'teacher_home_page.dart';
 import 'teacher_planning_page.dart';
 import 'teacher_profile_page.dart';
+import 'teacher_resources_page.dart';
 import 'teacher_students_page.dart';
 
 class TeacherShellPage extends StatefulWidget {
@@ -27,6 +28,8 @@ class _TeacherShellPageState extends State<TeacherShellPage> {
       case 3:
         return const TeacherStudentsPage();
       case 4:
+        return const TeacherResourcesPage();
+      case 5:
         return const TeacherProfilePage();
       default:
         return const SizedBox.shrink();
@@ -36,10 +39,16 @@ class _TeacherShellPageState extends State<TeacherShellPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(top: true, bottom: false, child: _buildCurrentPage()),
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: _buildCurrentPage(),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        onDestinationSelected: (index) {
+          setState(() => _currentIndex = index);
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -60,6 +69,11 @@ class _TeacherShellPageState extends State<TeacherShellPage> {
             icon: Icon(Icons.groups_outlined),
             selectedIcon: Icon(Icons.groups_rounded),
             label: 'Étudiants',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.folder_copy_outlined),
+            selectedIcon: Icon(Icons.folder_copy_rounded),
+            label: 'Ressources',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),

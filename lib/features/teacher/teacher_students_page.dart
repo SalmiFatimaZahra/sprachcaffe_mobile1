@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
+import '../../services/course_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
@@ -17,21 +18,23 @@ class TeacherStudentsPage extends StatefulWidget {
 
 class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
   final StudentService _studentService = StudentService();
+  final CourseService _courseService = CourseService();
 
   Future<void> _showAddStudentDialog() async {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final levelController = TextEditingController();
-    final courseController = TextEditingController();
 
+    String? selectedCourseId;
+    String? selectedCourseTitle;
     bool isLoading = false;
 
-    await showDialog(
+    final bool? added = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogContext, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
@@ -47,6 +50,103 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: _courseService.getMyCourses(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Text(
+                            'Erreur de chargement des cours.',
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          );
+                        }
+
+                        final courses = snapshot.data?.docs ?? [];
+
+                        if (courses.isEmpty) {
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: const Text(
+                              'Aucun cours trouvé. Ajoute d’abord un cours dans la page Classes.',
+                              style: TextStyle(
+                                height: 1.4,
+                                color: AppColors.mutedText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          value: selectedCourseId,
+                          decoration: InputDecoration(
+                            labelText: 'Cours',
+                            prefixIcon: const Icon(
+                              Icons.class_rounded,
+                              color: AppColors.mutedText,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.4,
+                              ),
+                            ),
+                          ),
+                          items: courses.map((doc) {
+                            final data = doc.data();
+                            final title = data['title'] ?? 'Cours sans titre';
+
+                            return DropdownMenuItem<String>(
+                              value: doc.id,
+                              child: Text(title),
+                            );
+                          }).toList(),
+                          onChanged: isLoading
+                              ? null
+                              : (value) {
+                            if (value == null) return;
+
+                            final selectedDoc = courses.firstWhere(
+                                  (doc) => doc.id == value,
+                            );
+
+                            final data = selectedDoc.data();
+
+                            setDialogState(() {
+                              selectedCourseId = selectedDoc.id;
+                              selectedCourseTitle =
+                                  data['title'] ?? 'Cours sans titre';
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
                     CustomTextField(
                       controller: nameController,
                       label: 'Nom complet',
@@ -68,13 +168,6 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
                       hintText: 'Ex. A1, A2, B1, B2',
                       prefixIcon: Icons.signal_cellular_alt_rounded,
                     ),
-                    const SizedBox(height: 14),
-                    CustomTextField(
-                      controller: courseController,
-                      label: 'Cours',
-                      hintText: 'Ex. Anglais professionnel',
-                      prefixIcon: Icons.class_rounded,
-                    ),
                   ],
                 ),
               ),
@@ -83,7 +176,7 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
                   onPressed: isLoading
                       ? null
                       : () {
-                    Navigator.of(dialogContext).pop();
+                    Navigator.of(dialogContext).pop(false);
                   },
                   child: const Text('Annuler'),
                 ),
@@ -94,16 +187,16 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
                     final name = nameController.text.trim();
                     final email = emailController.text.trim();
                     final level = levelController.text.trim();
-                    final course = courseController.text.trim();
 
-                    if (name.isEmpty ||
+                    if (selectedCourseId == null ||
+                        selectedCourseTitle == null ||
+                        name.isEmpty ||
                         email.isEmpty ||
-                        level.isEmpty ||
-                        course.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                        level.isEmpty) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Veuillez remplir tous les champs.',
+                            'Veuillez sélectionner un cours et remplir tous les champs.',
                           ),
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -118,30 +211,24 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
                         studentName: name,
                         studentEmail: email,
                         level: level,
-                        courseTitle: course,
+                        courseId: selectedCourseId!,
+                        courseTitle: selectedCourseTitle!,
                       );
 
-                      if (!mounted) return;
-
-                      Navigator.of(dialogContext).pop();
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Étudiant ajouté avec succès.',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop(true);
+                      }
                     } catch (e) {
-                      setDialogState(() => isLoading = false);
+                      if (dialogContext.mounted) {
+                        setDialogState(() => isLoading = false);
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Erreur: $e'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(
+                            content: Text('Erreur: $e'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
                     }
                   },
                   icon: const Icon(Icons.check_rounded),
@@ -154,10 +241,16 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
       },
     );
 
-    nameController.dispose();
-    emailController.dispose();
-    levelController.dispose();
-    courseController.dispose();
+    if (!mounted) return;
+
+    if (added == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Étudiant ajouté avec succès.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -169,7 +262,7 @@ class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
             badge: 'Étudiants',
             title: 'Suivi des apprenants',
             subtitle:
-            'Ajoute et consulte les étudiants associés à ton espace professeur.',
+            'Ajoute et consulte les étudiants associés à tes vrais cours.',
             icon: Icons.groups_rounded,
           ),
           Padding(

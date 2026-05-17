@@ -25,12 +25,12 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
 
     bool isLoading = false;
 
-    await showDialog(
+    final bool? added = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogContext, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
@@ -75,7 +75,7 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
                   onPressed: isLoading
                       ? null
                       : () {
-                    Navigator.of(dialogContext).pop();
+                    Navigator.of(dialogContext).pop(false);
                   },
                   child: const Text('Annuler'),
                 ),
@@ -91,7 +91,7 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
                     if (title.isEmpty ||
                         level.isEmpty ||
                         description.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
                         const SnackBar(
                           content: Text(
                             'Veuillez remplir tous les champs.',
@@ -111,25 +111,20 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
                         level: level,
                       );
 
-                      if (!mounted) return;
-
-                      Navigator.of(dialogContext).pop();
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Cours ajouté avec succès.'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop(true);
+                      }
                     } catch (e) {
-                      setDialogState(() => isLoading = false);
+                      if (dialogContext.mounted) {
+                        setDialogState(() => isLoading = false);
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Erreur: $e'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(
+                            content: Text('Erreur: $e'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
                     }
                   },
                   icon: const Icon(Icons.check_rounded),
@@ -142,9 +137,16 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
       },
     );
 
-    titleController.dispose();
-    descriptionController.dispose();
-    levelController.dispose();
+    if (!mounted) return;
+
+    if (added == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cours ajouté avec succès.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override

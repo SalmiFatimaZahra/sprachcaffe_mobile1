@@ -18,7 +18,6 @@ class StudentService {
 
     return _teacherStudentsCollection
         .where('teacherId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
@@ -26,6 +25,7 @@ class StudentService {
     required String studentName,
     required String studentEmail,
     required String level,
+    required String courseId,
     required String courseTitle,
   }) async {
     final user = _auth.currentUser;
@@ -37,12 +37,13 @@ class StudentService {
     await _teacherStudentsCollection.add({
       'teacherId': user.uid,
       'teacherEmail': user.email,
+      'courseId': courseId,
+      'courseTitle': courseTitle,
       'studentName': studentName,
       'studentEmail': studentEmail,
       'level': level,
       'progress': 0,
       'status': 'Nouveau',
-      'courseTitle': courseTitle,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }

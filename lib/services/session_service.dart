@@ -8,19 +8,6 @@ class SessionService {
   CollectionReference<Map<String, dynamic>> get _sessionsCollection {
     return _firestore.collection('sessions');
   }
-  Future<int> getMySessionsCount() async {
-    final user = _auth.currentUser;
-
-    if (user == null) {
-      return 0;
-    }
-
-    final snapshot = await _sessionsCollection
-        .where('teacherId', isEqualTo: user.uid)
-        .get();
-
-    return snapshot.docs.length;
-  }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> getMySessions() {
     final user = _auth.currentUser;
@@ -31,11 +18,11 @@ class SessionService {
 
     return _sessionsCollection
         .where('teacherId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
   Future<void> addSession({
+    required String courseId,
     required String courseTitle,
     required String groupName,
     required String date,
@@ -49,6 +36,7 @@ class SessionService {
     }
 
     await _sessionsCollection.add({
+      'courseId': courseId,
       'courseTitle': courseTitle,
       'groupName': groupName,
       'date': date,
@@ -59,5 +47,19 @@ class SessionService {
       'teacherEmail': user.email,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<int> getMySessionsCount() async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      return 0;
+    }
+
+    final snapshot = await _sessionsCollection
+        .where('teacherId', isEqualTo: user.uid)
+        .get();
+
+    return snapshot.docs.length;
   }
 }
