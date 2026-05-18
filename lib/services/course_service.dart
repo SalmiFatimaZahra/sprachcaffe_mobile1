@@ -8,19 +8,6 @@ class CourseService {
   CollectionReference<Map<String, dynamic>> get _coursesCollection {
     return _firestore.collection('courses');
   }
-  Future<int> getMyCoursesCount() async {
-    final user = _auth.currentUser;
-
-    if (user == null) {
-      return 0;
-    }
-
-    final snapshot = await _coursesCollection
-        .where('teacherId', isEqualTo: user.uid)
-        .get();
-
-    return snapshot.docs.length;
-  }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> getMyCourses() {
     final user = _auth.currentUser;
@@ -31,7 +18,6 @@ class CourseService {
 
     return _coursesCollection
         .where('teacherId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
@@ -56,5 +42,19 @@ class CourseService {
       'nextSession': 'Non programmée',
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<int> getMyCoursesCount() async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      return 0;
+    }
+
+    final snapshot = await _coursesCollection
+        .where('teacherId', isEqualTo: user.uid)
+        .get();
+
+    return snapshot.docs.length;
   }
 }

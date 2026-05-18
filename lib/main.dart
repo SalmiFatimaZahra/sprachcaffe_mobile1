@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/app_theme.dart';
 import 'features/auth/auth_wrapper.dart';
@@ -10,6 +11,11 @@ void main() async {
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  await Supabase.initialize(
+    url: 'https://cthjmuekvbdbqokpqlyk.supabase.co',
+    anonKey: 'sb_publishable_xW7d29OqY8i_oqG30PzUvQ_l-Q3nJUp',
   );
 
   runApp(const AcademyApp());
