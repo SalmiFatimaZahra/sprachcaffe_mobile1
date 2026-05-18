@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
@@ -24,6 +26,7 @@ class _StudentLevelTestPageState
 
   int? selectedIndex;
   bool answered = false;
+  bool isSaving = false;
 
   late List<Map<String, dynamic>> questions;
 
@@ -67,8 +70,35 @@ class _StudentLevelTestPageState
     return "C1";
   }
 
-  void showResult() {
+  Future<void> saveResult(String level) async {
+    try {
+      setState(() => isSaving = true);
+
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      await FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
+          .update({
+        "level": level,
+        "testScore": score,
+        "testLanguage": widget.language,
+        "testCompleted": true,
+        "updatedAt": FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint(e.toString());
+    } finally {
+      setState(() => isSaving = false);
+    }
+  }
+
+  Future<void> showResult() async {
     final level = getLevel();
+
+    await saveResult(level);
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -135,7 +165,10 @@ class _StudentLevelTestPageState
               },
               child: const Text(
                 "Terminer",
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -150,7 +183,11 @@ class _StudentLevelTestPageState
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: SingleChildScrollView(
+      body: isSaving
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
+          : SingleChildScrollView(
         child: Column(
           children: [
             PremiumHeader(
@@ -164,7 +201,8 @@ class _StudentLevelTestPageState
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                CrossAxisAlignment.start,
                 children: [
                   LinearProgressIndicator(
                     value:
@@ -243,7 +281,8 @@ class _StudentLevelTestPageState
                                 borderRadius:
                                 BorderRadius
                                     .circular(14),
-                                side: const BorderSide(
+                                side:
+                                const BorderSide(
                                   color:
                                   AppColors.border,
                                 ),
@@ -371,19 +410,6 @@ class _StudentLevelTestPageState
       },
       {
         "question":
-        "Nous habitons ___ Maroc.",
-        "options": [
-          "au",
-          "à",
-          "en",
-          "aux"
-        ],
-        "correct": 2,
-        "explanation":
-        "On dit « en Maroc » dans cet exercice.",
-      },
-      {
-        "question":
         "Elle est ___ intelligente que lui.",
         "options": [
           "plus",
@@ -446,6 +472,19 @@ class _StudentLevelTestPageState
         "correct": 2,
         "explanation":
         "« Bien que » demande le subjonctif.",
+      },
+      {
+        "question":
+        "Nous ___ partir maintenant.",
+        "options": [
+          "devons",
+          "devait",
+          "devez",
+          "doit"
+        ],
+        "correct": 0,
+        "explanation":
+        "Avec « nous », on utilise « devons ».",
       },
     ],
 
