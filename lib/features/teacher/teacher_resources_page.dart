@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -6,7 +7,6 @@ import '../../core/app_colors.dart';
 import '../../services/course_service.dart';
 import '../../services/resource_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/custom_text_field.dart';
 import '../../widgets/premium_header.dart';
 import '../../widgets/section_title.dart';
 
@@ -27,6 +27,7 @@ class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
 
     String? selectedCourseId;
     String? selectedCourseTitle;
+    fp.PlatformFile? selectedPdf;
     bool isLoading = false;
 
     final bool? added = await showDialog<bool>(
@@ -146,22 +147,68 @@ class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
                         );
                       },
                     ),
+
                     const SizedBox(height: 14),
-                    CustomTextField(
+
+                    TextField(
                       controller: titleController,
-                      label: 'Titre',
-                      hintText: 'Ex. Cours 1 - Introduction',
-                      prefixIcon: Icons.title_rounded,
+                      decoration: InputDecoration(
+                        labelText: 'Titre',
+                        hintText: 'Ex. Cours 1 - Introduction',
+                        prefixIcon: const Icon(
+                          Icons.title_rounded,
+                          color: AppColors.mutedText,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: AppColors.border,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.4,
+                          ),
+                        ),
+                      ),
                     ),
+
                     const SizedBox(height: 14),
-                    CustomTextField(
+
+                    TextField(
                       controller: descriptionController,
-                      label: 'Description',
-                      hintText: 'Décris le contenu du document',
-                      prefixIcon: Icons.description_rounded,
                       maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Description',
+                        hintText: 'Décris le contenu du document',
+                        prefixIcon: const Icon(
+                          Icons.description_rounded,
+                          color: AppColors.mutedText,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: AppColors.border,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.4,
+                          ),
+                        ),
+                      ),
                     ),
+
                     const SizedBox(height: 14),
+
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
@@ -170,21 +217,52 @@ class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: AppColors.border),
                       ),
-                      child: const Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.picture_as_pdf_rounded,
-                            color: AppColors.dark,
-                          ),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Après avoir cliqué sur Ajouter, le sélecteur de fichiers PDF va s’ouvrir.',
-                              style: TextStyle(
-                                height: 1.4,
-                                color: AppColors.mutedText,
-                                fontWeight: FontWeight.w600,
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.picture_as_pdf_rounded,
+                                color: AppColors.dark,
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  selectedPdf == null
+                                      ? 'Aucun PDF sélectionné.'
+                                      : selectedPdf!.name,
+                                  style: const TextStyle(
+                                    height: 1.4,
+                                    color: AppColors.dark,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: isLoading
+                                  ? null
+                                  : () async {
+                                FocusScope.of(dialogContext).unfocus();
+
+                                final file =
+                                await _resourceService.pickPdfFile();
+
+                                if (file == null) {
+                                  return;
+                                }
+
+                                setDialogState(() {
+                                  selectedPdf = file;
+                                });
+                              },
+                              icon: const Icon(Icons.upload_file_rounded),
+                              label: const Text('Choisir le PDF'),
                             ),
                           ),
                         ],
@@ -213,11 +291,12 @@ class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
                     if (selectedCourseId == null ||
                         selectedCourseTitle == null ||
                         title.isEmpty ||
-                        description.isEmpty) {
+                        description.isEmpty ||
+                        selectedPdf == null) {
                       ScaffoldMessenger.of(dialogContext).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Veuillez sélectionner un cours et remplir tous les champs.',
+                            'Veuillez sélectionner un cours, remplir les champs et choisir un PDF.',
                           ),
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -227,16 +306,11 @@ class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
 
                     FocusScope.of(dialogContext).unfocus();
 
-                    await Future.delayed(
-                      const Duration(milliseconds: 600),
-                    );
-
-                    if (!dialogContext.mounted) return;
-
                     setDialogState(() => isLoading = true);
 
                     try {
-                      await _resourceService.addPdfResource(
+                      await _resourceService.uploadPdfResource(
+                        pickedFile: selectedPdf!,
                         courseId: selectedCourseId!,
                         courseTitle: selectedCourseTitle!,
                         title: title,
@@ -259,7 +333,7 @@ class _TeacherResourcesPageState extends State<TeacherResourcesPage> {
                       }
                     }
                   },
-                  icon: const Icon(Icons.upload_file_rounded),
+                  icon: const Icon(Icons.cloud_upload_rounded),
                   label: Text(isLoading ? 'Envoi...' : 'Ajouter'),
                 ),
               ],

@@ -17,24 +17,14 @@ class TeacherShellPage extends StatefulWidget {
 class _TeacherShellPageState extends State<TeacherShellPage> {
   int _currentIndex = 0;
 
-  Widget _buildCurrentPage() {
-    switch (_currentIndex) {
-      case 0:
-        return const TeacherHomePage();
-      case 1:
-        return const TeacherCoursesPage();
-      case 2:
-        return const TeacherPlanningPage();
-      case 3:
-        return const TeacherStudentsPage();
-      case 4:
-        return const TeacherResourcesPage();
-      case 5:
-        return const TeacherProfilePage();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
+  late final List<Widget> _pages = [
+    const TeacherHomePage(),
+    const TeacherCoursesPage(),
+    const TeacherPlanningPage(),
+    const TeacherStudentsPage(),
+    const TeacherResourcesPage(),
+    const TeacherProfilePage(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -42,42 +32,51 @@ class _TeacherShellPageState extends State<TeacherShellPage> {
       body: SafeArea(
         top: true,
         bottom: false,
-        child: _buildCurrentPage(),
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
         },
-        destinations: const [
-          NavigationDestination(
+        type: BottomNavigationBarType.fixed,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
+        iconSize: 22,
+        items: const [
+          BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
+            activeIcon: Icon(Icons.home_rounded),
             label: 'Accueil',
           ),
-          NavigationDestination(
+          BottomNavigationBarItem(
             icon: Icon(Icons.class_outlined),
-            selectedIcon: Icon(Icons.class_rounded),
+            activeIcon: Icon(Icons.class_rounded),
             label: 'Classes',
           ),
-          NavigationDestination(
+          BottomNavigationBarItem(
             icon: Icon(Icons.event_note_outlined),
-            selectedIcon: Icon(Icons.event_note_rounded),
+            activeIcon: Icon(Icons.event_note_rounded),
             label: 'Planning',
           ),
-          NavigationDestination(
+          BottomNavigationBarItem(
             icon: Icon(Icons.groups_outlined),
-            selectedIcon: Icon(Icons.groups_rounded),
+            activeIcon: Icon(Icons.groups_rounded),
             label: 'Étudiants',
           ),
-          NavigationDestination(
+          BottomNavigationBarItem(
             icon: Icon(Icons.folder_copy_outlined),
-            selectedIcon: Icon(Icons.folder_copy_rounded),
+            activeIcon: Icon(Icons.folder_copy_rounded),
             label: 'Ressources',
           ),
-          NavigationDestination(
+          BottomNavigationBarItem(
             icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
+            activeIcon: Icon(Icons.person_rounded),
             label: 'Profil',
           ),
         ],
