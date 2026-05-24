@@ -13,70 +13,139 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
+
+  // ================= CONTROLLERS =================
   final cardNumberController = TextEditingController();
   final cardNameController = TextEditingController();
   final expiryController = TextEditingController();
   final cvvController = TextEditingController();
 
-  bool isLoading = false;
+  // ================= STATE =================
+  bool isLoading = true;
+  bool isPaying = false;
 
-  Future<void> makePayment() async {
-    if (cardNumberController.text.isEmpty ||
-        cardNameController.text.isEmpty ||
-        expiryController.text.isEmpty ||
-        cvvController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Remplir toutes les informations de paiement")),
-      );
-      return;
-    }
+  List<Map<String, dynamic>> selectedCourses = [];
+  double total = 0;
 
-    setState(() => isLoading = true);
+  // ================= PRICES =================
+  final prices = {
+    "Français": 1200,
+    "Anglais": 1400,
+    "Espagnol": 1100,
+    "Allemand": 1500,
+    "Arabe": 1000,
+    "Italien": 1300,
+  };
 
+  @override
+  void initState() {
+    super.initState();
+    loadCourses();
+  }
+
+  // ================= LOAD COURSES =================
+  Future<void> loadCourses() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        throw Exception("Utilisateur non connecté");
-      }
-
-      // 💾 SAVE PAYMENT INFO (optionnel mais utile)
-      await FirebaseFirestore.instance
-          .collection("users")
-          .doc(user.uid)
-          .update({
-        "isPaid": true,
-        "paymentStatus": "paid",
-
-        "payment": {
-          "cardLast4": cardNumberController.text
-              .trim()
-              .substring(cardNumberController.text.length - 4),
-          "cardName": cardNameController.text.trim(),
-          "expiry": expiryController.text.trim(),
-        }
-      });
+      if (user == null) return;
 
       final doc = await FirebaseFirestore.instance
           .collection("users")
           .doc(user.uid)
           .get();
 
-      final data = doc.data() as Map<String, dynamic>;
-      final role = data["role"];
+      final data = doc.data();
 
-      UserRole userRole;
+      if (data != null && data["cours"] is List) {
+        selectedCourses = List<Map<String, dynamic>>.from(
+          (data["cours"] as List).map(
+                (e) => Map<String, dynamic>.from(e),
+          ),
+        );
 
-      switch (role) {
-        case "student":
-          userRole = UserRole.student;
-          break;
-        case "teacher":
-          userRole = UserRole.teacher;
-          break;
-        default:
-          userRole = UserRole.admin;
+        calculateTotal();
       }
+
+    } catch (e) {
+      debugPrint("Payment load error: $e");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // ================= TOTAL =================
+  void calculateTotal() {
+    total = selectedCourses.fold(0, (sum, c) {
+      final lang = c["langue"];
+      return sum + (prices[lang] ?? 1200);
+    });
+
+    setState(() {});
+  }
+
+  // ================= PAYMENT =================
+  Future<void> makePayment() async {
+
+    final card = cardNumberController.text.trim();
+    final name = cardNameController.text.trim();
+    final expiry = expiryController.text.trim();
+    final cvv = cvvController.text.trim();
+
+    if (card.isEmpty || name.isEmpty || expiry.isEmpty || cvv.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Veuillez remplir tous les champs")),
+      );
+      return;
+    }
+
+    if (card.length < 12) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Numéro de carte invalide")),
+      );
+      return;
+    }
+
+    if (cvv.length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("CVV invalide")),
+      );
+      return;
+    }
+
+    setState(() => isPaying = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("Utilisateur non connecté");
+
+      final last4 = card.substring(card.length - 4);
+
+      await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user.uid)
+          .set({
+        "profileCompleted": true,
+        "isPaid": true,
+        "paymentStatus": "Payé",
+        "payment": {
+          "montant": total,
+          "date": FieldValue.serverTimestamp(),
+          "cardLast4": last4,
+          "cardHolder": name,
+          "expiry": expiry,
+        },
+      }, SetOptions(merge: true));
+
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user.uid)
+          .get();
+
+      final role = doc.data()?["role"] ?? "student";
+
+      UserRole userRole = UserRole.student;
+      if (role == "teacher") userRole = UserRole.teacher;
+      if (role == "admin") userRole = UserRole.admin;
 
       if (!mounted) return;
 
@@ -84,12 +153,10 @@ class _PaymentPageState extends State<PaymentPage> {
 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur paiement: $e")),
+        SnackBar(content: Text("Erreur paiement : $e")),
       );
     } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      if (mounted) setState(() => isPaying = false);
     }
   }
 
@@ -102,84 +169,147 @@ class _PaymentPageState extends State<PaymentPage> {
     super.dispose();
   }
 
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Paiement sécurisé")),
+      backgroundColor: Colors.grey.shade100,
 
-      body: SingleChildScrollView(
+      appBar: AppBar(
+        title: const Text("Paiement"),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
 
-            const Icon(Icons.lock, size: 70, color: Colors.blue),
+            // ================= SUMMARY =================
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Cours: ${selectedCourses.length}",
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    "${total.toStringAsFixed(0)} DH",
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            // ================= DÉTAIL COURS =================
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Détail des cours",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  ...selectedCourses.map((c) {
+                    final lang = c["langue"];
+                    final price = prices[lang] ?? 1200;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "$lang (${c["niveau"]})",
+                          ),
+                          Text(
+                            "$price DH",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
 
             const SizedBox(height: 20),
 
-            TextField(
-              controller: cardNumberController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Numéro de carte",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.credit_card),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            TextField(
-              controller: cardNameController,
-              decoration: const InputDecoration(
-                labelText: "Nom sur la carte",
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: expiryController,
-                    decoration: const InputDecoration(
-                      labelText: "MM/AA",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 10),
-
-                Expanded(
-                  child: TextField(
-                    controller: cvvController,
-                    obscureText: true,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "CVV",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            // ================= FORM =================
+            _field(cardNameController, "Nom sur carte"),
+            const SizedBox(height: 12),
+            _field(cardNumberController, "Numéro carte",
+                keyboard: TextInputType.number),
+            const SizedBox(height: 12),
+            _field(expiryController, "MM/YY"),
+            const SizedBox(height: 12),
+            _field(cvvController, "CVV",
+                keyboard: TextInputType.number, obscure: true),
 
             const SizedBox(height: 25),
 
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 55,
               child: ElevatedButton(
-                onPressed: isLoading ? null : makePayment,
-                child: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Payer maintenant"),
+                onPressed: isPaying ? null : makePayment,
+                child: isPaying
+                    ? const CircularProgressIndicator(
+                    color: Colors.white)
+                    : const Text("Payer"),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ================= FIELD WIDGET =================
+  Widget _field(
+      TextEditingController controller,
+      String label, {
+        TextInputType keyboard = TextInputType.text,
+        bool obscure = false,
+      }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboard,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
       ),
     );
   }
