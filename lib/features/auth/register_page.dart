@@ -8,6 +8,7 @@ import '../../core/user_role.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'login_page.dart';
+import '../student/student_register_page.dart';
 
 class RegisterPage extends StatefulWidget {
   final UserRole selectedRole;
@@ -87,19 +88,30 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       await user.updateDisplayName(name);
-      const role = 'student';
+      final role = _roleToString(widget.selectedRole);
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'uid': user.uid,
         'name': name,
         'email': email,
         'role': role,
+        'status': 'active',
+        'profileCompleted': widget.selectedRole == UserRole.student ? false : true,
+        'isPaid': widget.selectedRole == UserRole.student ? false : true,
+        'paymentStatus': widget.selectedRole == UserRole.student ? 'Pending' : 'Not required',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
 
       _showMessage('Compte créé avec succès.');
+
+      if (widget.selectedRole == UserRole.student) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const StudentRegisterPage()),
+        );
+        return;
+      }
 
       AppNavigator.openDashboard(context, widget.selectedRole);
     } on FirebaseAuthException catch (e) {

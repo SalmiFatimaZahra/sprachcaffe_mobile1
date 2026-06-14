@@ -6,7 +6,6 @@ import '../../core/app_colors.dart';
 import '../../core/user_role.dart';
 import '../auth/login_page.dart';
 import '../../widgets/course_card.dart';
-import '../../widgets/dashboard_card.dart';
 import '../../widgets/premium_header.dart';
 import '../../widgets/section_title.dart';
 
@@ -22,17 +21,145 @@ class StudentHomePage extends StatelessWidget {
     required this.onOpenCourseDetails,
   });
 
+  // ================= LOGOUT =================
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => const LoginPage(selectedRole: UserRole.student),
+        builder: (_) => const LoginPage(
+          selectedRole: UserRole.student,
+        ),
       ),
           (route) => false,
     );
   }
 
+  // ================= ADD COURSE BOTTOM SHEET =================
+  void _showAddCourseSheet(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    String langue = "Français";
+    String niveau = "Débutant";
+    String horaire = "Matin";
+    String mode = "Présentiel";
+
+    final langues = ["Français", "Anglais", "Espagnol", "Allemand", "Arabe", "Italien"];
+    final niveaux = ["Débutant", "A1", "A2", "B1", "B2", "C1"];
+    final horaires = ["Matin", "Après-midi", "Soir", "Week-end"];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateSheet) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "Ajouter un cours",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    DropdownButtonFormField(
+                      value: langue,
+                      decoration: _input("Langue", Icons.language),
+                      items: langues.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (v) => setStateSheet(() => langue = v.toString()),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    DropdownButtonFormField(
+                      value: niveau,
+                      decoration: _input("Niveau", Icons.school),
+                      items: niveaux.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (v) => setStateSheet(() => niveau = v.toString()),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    DropdownButtonFormField(
+                      value: horaire,
+                      decoration: _input("Horaire", Icons.schedule),
+                      items: horaires.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (v) => setStateSheet(() => horaire = v.toString()),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setStateSheet(() => mode = "Présentiel"),
+                            child: _modeBox("Présentiel", Icons.school, mode == "Présentiel"),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setStateSheet(() => mode = "En ligne"),
+                            child: _modeBox("En ligne", Icons.laptop_mac, mode == "En ligne"),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.all(14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        onPressed: () async {
+                          final newCourse = {
+                            "langue": langue,
+                            "niveau": niveau,
+                            "horaire": horaire,
+                            "mode": mode,
+                          };
+
+                          await FirebaseFirestore.instance
+                              .collection("users")
+                              .doc(uid)
+                              .update({
+                            "cours": FieldValue.arrayUnion([newCourse])
+                          });
+
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Ajouter", style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -46,12 +173,22 @@ class StudentHomePage extends StatelessWidget {
           );
         }
 
-        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
 
-        final name = data["name"] ?? "Étudiant";
-        final level = data["level"] ?? "A0";
-        final language = data["language"] ?? "Français";
-        final coursesCount = data["coursesCount"] ?? 0;
+        final selectedCourses = List<Map<String, dynamic>>.from(
+          (data["cours"] ?? []).map((e) => Map<String, dynamic>.from(e)),
+        );
+
+        final fullName = "${data["prenom"] ?? ""} ${data["nom"] ?? ""}".trim();
+
+        final isPaid = data["isPaid"] ?? false;
+
+        final coursesCount = selectedCourses.length;
+
+        String level = selectedCourses.isNotEmpty
+            ? selectedCourses.first["niveau"] ?? "Débutant"
+            : "Débutant";
+
         final attendance = data["attendance"] ?? 0;
 
         return Scaffold(
@@ -59,63 +196,30 @@ class StudentHomePage extends StatelessWidget {
             child: Column(
               children: [
 
-                /// 🔥 HEADER
+                // ================= HEADER =================
                 PremiumHeader(
-                  badge: 'Espace étudiant',
-                  title: 'Bonjour $name 👋',
-                  subtitle: 'Ton apprentissage personnalisé continue ici.',
+                  badge: isPaid ? "Étudiant Premium" : "Paiement en attente",
+                  title: "Bonjour $fullName 👋",
+                  subtitle: "Ton espace d'apprentissage",
                   icon: Icons.school_rounded,
                   bottom: Column(
                     children: [
-
                       Row(
                         children: [
-                          Expanded(
-                            child: _HeaderMiniStat(value: level, label: 'Niveau'),
-                          ),
+                          Expanded(child: _HeaderMiniStat(value: level, label: "Niveau")),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: _HeaderMiniStat(value: '$coursesCount', label: 'Cours'),
-                          ),
+                          Expanded(child: _HeaderMiniStat(value: "$coursesCount", label: "Cours")),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: _HeaderMiniStat(value: '$attendance%', label: 'Assiduité'),
-                          ),
+                          Expanded(child: _HeaderMiniStat(value: "$attendance%", label: "Assiduité")),
                         ],
                       ),
-
                       const SizedBox(height: 14),
-
-                      /// 🔥 LOGOUT BUTTON
                       Align(
                         alignment: Alignment.centerRight,
-                        child: Material(
-                          color: Colors.red.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
-                            onTap: () => _logout(context),
-                            borderRadius: BorderRadius.circular(16),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.logout, color: Colors.white, size: 18),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    "Déconnexion",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                        child: TextButton.icon(
+                          onPressed: () => _logout(context),
+                          icon: const Icon(Icons.logout, color: Colors.red),
+                          label: const Text("Déconnexion"),
                         ),
                       ),
                     ],
@@ -124,12 +228,11 @@ class StudentHomePage extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                /// 🔥 TEST DE NIVEAU
+                // ================= TEST DE NIVEAU (CONSERVÉ) =================
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: InkWell(
                     onTap: onOpenLevelTest,
-                    borderRadius: BorderRadius.circular(24),
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -139,41 +242,16 @@ class StudentHomePage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Row(
-                        children: [
-
-                          const Icon(
-                            Icons.quiz_rounded,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-
-                          const SizedBox(width: 16),
-
+                        children: const [
+                          Icon(Icons.quiz_rounded, color: Colors.white, size: 32),
+                          SizedBox(width: 16),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Test de niveau $language",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                const Text(
-                                  "Évalue ton niveau automatiquement",
-                                  style: TextStyle(color: Colors.white70),
-                                ),
-                              ],
+                            child: Text(
+                              "Test de niveau\nÉvalue ton niveau automatiquement",
+                              style: TextStyle(color: Colors.white),
                             ),
                           ),
-
-                          const Icon(
-                            Icons.arrow_forward_ios,
-                            color: Colors.white,
-                          ),
+                          Icon(Icons.arrow_forward_ios, color: Colors.white),
                         ],
                       ),
                     ),
@@ -182,94 +260,90 @@ class StudentHomePage extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
-                /// 🔥 CONTENT
+                // ================= ACTIONS =================
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: SectionTitle("Actions rapides"),
+                ),
+
+                const SizedBox(height: 14),
+
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
-                      const SectionTitle('Vue rapide'),
-
-                      const SizedBox(height: 14),
-
-                      DashboardCard(
-                        value: "Mercredi 18:30",
-                        title: "Prochain cours",
-                        subtitle: "Cours personnalisé",
-                        icon: Icons.schedule_rounded,
+                      // ✅ UNIQUE bouton ajouter cours
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showAddCourseSheet(context),
+                          icon: const Icon(Icons.add),
+                          label: const Text("Ajouter un cours"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.all(14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 12),
 
-                      DashboardCard(
-                        value: "En progression",
-                        title: "Suivi",
-                        subtitle: "Ton apprentissage évolue chaque semaine",
-                        icon: Icons.trending_up_rounded,
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      /// 🔥 ACTIONS
-                      const SectionTitle('Actions rapides'),
-
-                      const SizedBox(height: 14),
-
                       Row(
                         children: [
-
                           Expanded(
                             child: _QuickActionCard(
                               icon: Icons.smart_toy_rounded,
-                              title: 'Chatbot',
-                              subtitle: 'Assistant IA',
+                              title: "Chatbot",
+                              subtitle: "IA",
                               onTap: onOpenChatbot,
                             ),
                           ),
-
                           const SizedBox(width: 12),
-
                           Expanded(
                             child: _QuickActionCard(
                               icon: Icons.menu_book_rounded,
-                              title: 'Cours',
-                              subtitle: 'Voir mes formations',
+                              title: "Cours",
+                              subtitle: "Mes formations",
                               onTap: () => onOpenCourseDetails(),
                             ),
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 28),
-
-                      /// 🔥 COURS
-                      const SectionTitle('Cours recommandés'),
-
-                      const SizedBox(height: 14),
-
-                      CourseCard(
-                        title: 'Anglais professionnel',
-                        subtitle: 'Business communication',
-                        badge: 'En cours',
-                        schedule: 'Lundi & mercredi',
-                        icon: Icons.business_center_rounded,
-                        onTap: () => onOpenCourseDetails('Anglais professionnel'),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      CourseCard(
-                        title: 'Français conversation',
-                        subtitle: 'Expression orale',
-                        badge: 'Recommandé',
-                        schedule: 'Samedi',
-                        icon: Icons.record_voice_over_rounded,
-                        onTap: () => onOpenCourseDetails('Français conversation'),
-                      ),
                     ],
                   ),
                 ),
+
+                const SizedBox(height: 28),
+
+                // ================= COURS =================
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: SectionTitle("Mes cours"),
+                ),
+
+                const SizedBox(height: 14),
+
+                if (selectedCourses.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text("Aucun cours"),
+                  ),
+
+                ...selectedCourses.map((cours) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: CourseCard(
+                    title: cours["langue"] ?? "",
+                    subtitle: "${cours["niveau"]} • ${cours["mode"]}",
+                    badge: isPaid ? "Actif" : "En attente",
+                    schedule: cours["horaire"] ?? "",
+                    icon: Icons.school,
+                    onTap: () => onOpenCourseDetails(cours["langue"]),
+                  ),
+                )),
               ],
             ),
           ),
@@ -277,43 +351,49 @@ class StudentHomePage extends StatelessWidget {
       },
     );
   }
+
+  Widget _modeBox(String text, IconData icon, bool selected) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: selected ? Colors.blue.shade100 : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: selected ? Colors.blue : Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [Icon(icon), const SizedBox(height: 8), Text(text)],
+      ),
+    );
+  }
+
+  InputDecoration _input(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+    );
+  }
 }
 
-/// =====================
-/// WIDGETS UI
-/// =====================
-
+// ================= MINI STAT =================
 class _HeaderMiniStat extends StatelessWidget {
   final String value;
   final String label;
 
-  const _HeaderMiniStat({
-    required this.value,
-    required this.label,
-  });
+  const _HeaderMiniStat({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-          ),
-        ),
+        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.8))),
       ],
     );
   }
 }
 
+// ================= QUICK CARD =================
 class _QuickActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -334,26 +414,22 @@ class _QuickActionCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: Colors.grey.shade300),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
-                backgroundColor: AppColors.primarySoft,
-                child: Icon(icon, color: AppColors.dark),
+                backgroundColor: Colors.blue.shade50,
+                child: Icon(icon, color: Colors.blue),
               ),
               const SizedBox(height: 12),
-              Text(title,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(subtitle,
-                  style: const TextStyle(color: AppColors.mutedText)),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(subtitle, style: const TextStyle(color: Colors.grey)),
             ],
           ),
         ),
