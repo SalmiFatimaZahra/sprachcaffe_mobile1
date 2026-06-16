@@ -40,12 +40,10 @@ class StudentHomePage extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     String langue = "Français";
-    String niveau = "Débutant";
     String horaire = "Matin";
     String mode = "Présentiel";
 
     final langues = ["Français", "Anglais", "Espagnol", "Allemand", "Arabe", "Italien"];
-    final niveaux = ["Débutant", "A1", "A2", "B1", "B2", "C1"];
     final horaires = ["Matin", "Après-midi", "Soir", "Week-end"];
 
     showModalBottomSheet(
@@ -81,11 +79,26 @@ class StudentHomePage extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    DropdownButtonFormField(
-                      value: niveau,
-                      decoration: _input("Niveau", Icons.school),
-                      items: niveaux.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                      onChanged: (v) => setStateSheet(() => niveau = v.toString()),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.blue.shade100),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.psychology_alt, color: Colors.blue),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Niveau : à déterminer par l’IA après le test",
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                     const SizedBox(height: 16),
@@ -130,19 +143,30 @@ class StudentHomePage extends StatelessWidget {
                           ),
                         ),
                         onPressed: () async {
+                          final userRef = FirebaseFirestore.instance
+                              .collection("users")
+                              .doc(uid);
+
+                          final userDoc = await userRef.get();
+                          final userData = userDoc.data() ?? {};
+                          final bool alreadyTested = userData["testCompleted"] == true;
+                          final String savedLevel =
+                          (userData["level"] ?? "À déterminer après test").toString();
+
                           final newCourse = {
                             "langue": langue,
-                            "niveau": niveau,
+                            "niveau": alreadyTested ? savedLevel : "À déterminer après test",
+                            "niveauStatus": alreadyTested ? "determined" : "pending_test",
                             "horaire": horaire,
                             "mode": mode,
                           };
 
-                          await FirebaseFirestore.instance
-                              .collection("users")
-                              .doc(uid)
-                              .update({
-                            "cours": FieldValue.arrayUnion([newCourse])
-                          });
+                          await userRef.set({
+                            "language": langue,
+                            if (!alreadyTested) "level": "À déterminer",
+                            if (!alreadyTested) "testCompleted": false,
+                            "cours": FieldValue.arrayUnion([newCourse]),
+                          }, SetOptions(merge: true));
 
                           Navigator.pop(context);
                         },
@@ -182,12 +206,15 @@ class StudentHomePage extends StatelessWidget {
         final fullName = "${data["prenom"] ?? ""} ${data["nom"] ?? ""}".trim();
 
         final isPaid = data["isPaid"] ?? false;
+        final bool testCompleted = data["testCompleted"] == true;
 
         final coursesCount = selectedCourses.length;
 
-        String level = selectedCourses.isNotEmpty
-            ? selectedCourses.first["niveau"] ?? "Débutant"
-            : "Débutant";
+        final String level = (data["level"] ??
+            (selectedCourses.isNotEmpty
+                ? selectedCourses.first["niveau"]
+                : "À déterminer"))
+            .toString();
 
         final attendance = data["attendance"] ?? 0;
 
@@ -228,37 +255,42 @@ class StudentHomePage extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // ================= TEST DE NIVEAU (CONSERVÉ) =================
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: InkWell(
-                    onTap: onOpenLevelTest,
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [AppColors.primary, AppColors.dark],
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.quiz_rounded, color: Colors.white, size: 32),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              "Test de niveau\nÉvalue ton niveau automatiquement",
-                              style: TextStyle(color: Colors.white),
-                            ),
+                // ================= TEST DE NIVEAU =================
+                // Le bouton du test s'affiche seulement si l'étudiant
+                // n'a pas encore passé le test.
+                if (!testCompleted) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: InkWell(
+                      onTap: onOpenLevelTest,
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppColors.primary, AppColors.dark],
                           ),
-                          Icon(Icons.arrow_forward_ios, color: Colors.white),
-                        ],
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.quiz_rounded, color: Colors.white, size: 32),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                "Test de niveau\nÉvalue ton niveau automatiquement",
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward_ios, color: Colors.white),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 28),
+                ],
 
-                const SizedBox(height: 28),
+                if (testCompleted) const SizedBox(height: 8),
 
                 // ================= ACTIONS =================
                 const Padding(
@@ -337,7 +369,7 @@ class StudentHomePage extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: CourseCard(
                     title: cours["langue"] ?? "",
-                    subtitle: "${cours["niveau"]} • ${cours["mode"]}",
+                    subtitle: "${cours["niveau"] ?? "À déterminer"} • ${cours["mode"]}",
                     badge: isPaid ? "Actif" : "En attente",
                     schedule: cours["horaire"] ?? "",
                     icon: Icons.school,

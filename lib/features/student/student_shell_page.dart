@@ -43,8 +43,18 @@ class _StudentShellPageState extends State<StudentShellPage> {
       final data = doc.data();
 
       if (data != null) {
+        String resolvedLanguage = (data["language"] ?? "").toString();
+
+        if (resolvedLanguage.isEmpty && data["cours"] is List) {
+          final courses = data["cours"] as List;
+          if (courses.isNotEmpty && courses.first is Map) {
+            final firstCourse = Map<String, dynamic>.from(courses.first as Map);
+            resolvedLanguage = (firstCourse["langue"] ?? "").toString();
+          }
+        }
+
         setState(() {
-          language = data["language"] ?? "Français";
+          language = resolvedLanguage.isEmpty ? "Français" : resolvedLanguage;
           isLoadingLanguage = false;
         });
       } else {
@@ -64,13 +74,30 @@ class _StudentShellPageState extends State<StudentShellPage> {
     );
   }
 
-  void _openLevelTest() {
+  Future<void> _openLevelTest() async {
     if (isLoadingLanguage) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Chargement de la langue...")),
       );
       return;
     }
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final doc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(uid)
+        .get();
+
+    final data = doc.data() ?? {};
+
+    if (data["testCompleted"] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Le test de niveau est déjà passé.")),
+      );
+      return;
+    }
+
+    if (!mounted) return;
 
     Navigator.of(context).push(
       MaterialPageRoute(

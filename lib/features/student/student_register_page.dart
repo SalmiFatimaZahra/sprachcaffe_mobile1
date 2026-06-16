@@ -36,15 +36,6 @@ class _StudentRegisterPageState
     "Italien",
   ];
 
-  final List<String> niveaux = [
-    "Débutant",
-    "A1",
-    "A2",
-    "B1",
-    "B2",
-    "C1",
-  ];
-
   final List<String> horaires = [
     "Matin",
     "Après-midi",
@@ -69,7 +60,8 @@ class _StudentRegisterPageState
 
       selectedCourses.add({
         "langue": "Français",
-        "niveau": "Débutant",
+        "niveau": "À déterminer après test",
+        "niveauStatus": "pending_test",
         "mode": "Présentiel",
         "horaire": "Matin",
       });
@@ -131,6 +123,10 @@ class _StudentRegisterPageState
         "ville": villeController.text.trim(),
         "age": ageController.text.trim(),
         "sexe": sexe,
+
+        "language": selectedCourses.first["langue"],
+        "level": "À déterminer",
+        "testCompleted": false,
 
         "cours": selectedCourses
             .map((c) => Map<String, dynamic>.from(c))
@@ -524,29 +520,26 @@ class _StudentRegisterPageState
 
                     const SizedBox(height: 16),
 
-                    DropdownButtonFormField(
-                      value: cours["niveau"],
-
-                      decoration: inputDecoration(
-                        "Niveau",
-                        Icons.school,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.blue.shade100),
                       ),
-
-                      items: niveaux.map((niveau) {
-
-                        return DropdownMenuItem(
-                          value: niveau,
-                          child: Text(niveau),
-                        );
-
-                      }).toList(),
-
-                      onChanged: (value) {
-
-                        setState(() {
-                          cours["niveau"] = value as String;
-                        });
-                      },
+                      child: const Row(
+                        children: [
+                          Icon(Icons.psychology_alt, color: Colors.blue),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Le niveau sera déterminé automatiquement par l’IA après le test de niveau.",
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                     const SizedBox(height: 16),
