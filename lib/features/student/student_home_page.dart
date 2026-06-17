@@ -40,7 +40,7 @@ class StudentHomePage extends StatelessWidget {
     String mode = "Présentiel";
 
     final langues = ["Français", "Anglais", "Espagnol", "Allemand", "Arabe", "Italien"];
-    final horaires = ["Matin", "Après-midi", "Soir", "Week-end"];
+    final horaires = ["En cours de la semaine", "Week-end"];
 
     showModalBottomSheet(
       context: context,
