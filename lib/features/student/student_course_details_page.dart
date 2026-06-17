@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
@@ -7,120 +8,175 @@ import '../../widgets/premium_header.dart';
 import '../../widgets/section_title.dart';
 
 class StudentCourseDetailsPage extends StatelessWidget {
-  final String courseTitle;
+  final String courseId;
 
   const StudentCourseDetailsPage({
     super.key,
-    required this.courseTitle,
+    required this.courseId,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(courseTitle),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            PremiumHeader(
-              badge: 'Détail du cours',
-              title: courseTitle,
-              subtitle: 'Une fiche structurée pour que tu puisses brancher ensuite les vraies données sans refaire l’UI.',
-              icon: Icons.auto_stories_rounded,
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const DashboardCard(
-                    value: '12 semaines',
-                    title: 'Durée du parcours',
-                    subtitle: 'Programme découpé en modules avec exercices et suivi régulier.',
-                    icon: Icons.schedule_rounded,
-                  ),
-                  const SizedBox(height: 12),
-                  const DashboardCard(
-                    value: 'Coach dédié',
-                    title: 'Accompagnement',
-                    subtitle: 'Feedback sur la progression et recommandations personnalisées.',
-                    icon: Icons.support_agent_rounded,
-                  ),
-                  const SizedBox(height: 28),
-                  const SectionTitle('Ce que tu vas travailler'),
-                  const SizedBox(height: 14),
-                  const _BulletTile(text: 'Compréhension orale et écrite'),
-                  const _BulletTile(text: 'Expression professionnelle'),
-                  const _BulletTile(text: 'Vocabulaire contextualisé'),
-                  const _BulletTile(text: 'Mises en situation et corrections'),
-                  const SizedBox(height: 28),
-                  const SectionTitle('Organisation'),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _InfoLine(label: 'Format', value: 'Groupe + ressources digitales'),
-                        SizedBox(height: 14),
-                        _InfoLine(label: 'Rythme', value: '2 séances par semaine'),
-                        SizedBox(height: 14),
-                        _InfoLine(label: 'Suivi', value: 'Quiz, devoirs et feedback continu'),
-                        SizedBox(height: 14),
-                        _InfoLine(label: 'Validation', value: 'Projet final + test de niveau'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  CustomButton(
-                    label: 'Demander une orientation',
-                    icon: Icons.chat_bubble_outline_rounded,
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Branche ici la demande d’orientation ou l’inscription.'),
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("courses")
+          .doc(courseId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Scaffold(
+            body: Center(child: Text("📌 Cours introuvable")),
+          );
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+
+        // ================= SAFE FIELDS =================
+        final String title = (data["title"] ?? data["langue"] ?? "Cours").toString();
+        final String description = (data["description"] ?? "Aucune description").toString();
+        final String duration = (data["duration"] ?? "-").toString();
+        final String teacher = (data["teacherEmail"] ?? "Non défini").toString();
+        final String format = (data["format"] ?? "-").toString();
+        final String schedule = (data["schedule"] ?? data["horaire"] ?? "-").toString();
+        final String validation = (data["validation"] ?? "-").toString();
+        final String level = (data["level"] ?? data["niveau"] ?? "-").toString();
+
+        // ================= OBJECTIVES =================
+        final List<String> objectives = [];
+
+        if (data["objectives"] is List) {
+          objectives.addAll(List<String>.from(data["objectives"]));
+        } else if (data["objectives"] is String) {
+          objectives.add(data["objectives"]);
+        }
+
+        return Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                PremiumHeader(
+                  badge: 'Détail du cours',
+                  title: title,
+                  subtitle: description,
+                  icon: Icons.auto_stories_rounded,
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ================= DASHBOARD =================
+                      DashboardCard(
+                        value: duration,
+                        title: 'Durée du parcours',
+                        subtitle: 'Informations du cours',
+                        icon: Icons.schedule_rounded,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      DashboardCard(
+                        value: teacher,
+                        title: 'Enseignant',
+                        subtitle: 'Responsable du cours',
+                        icon: Icons.person_rounded,
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // ================= OBJECTIVES =================
+                      const SectionTitle('Ce que tu vas travailler'),
+                      const SizedBox(height: 14),
+
+                      if (objectives.isEmpty)
+                        const Text(
+                          "Aucun objectif défini pour ce cours",
+                          style: TextStyle(color: Colors.grey),
+                        )
+                      else
+                        ...objectives.map(
+                              (e) => _BulletTile(text: e),
                         ),
-                      );
-                    },
+
+                      const SizedBox(height: 28),
+
+                      // ================= ORGANISATION =================
+                      const SectionTitle('Organisation'),
+                      const SizedBox(height: 14),
+
+                      _InfoBox(label: "Format", value: format),
+                      _InfoBox(label: "Rythme", value: schedule),
+                      _InfoBox(label: "Validation", value: validation),
+                      _InfoBox(label: "Niveau", value: level),
+
+                      const SizedBox(height: 30),
+
+                      // ================= ACTION =================
+                      CustomButton(
+                        label: 'Demander une orientation',
+                        icon: Icons.chat_bubble_outline_rounded,
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Chatbot : question sur "$title"',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _BulletTile extends StatelessWidget {
-  final String text;
+// ================= INFO BOX =================
+class _InfoBox extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _BulletTile({
-    required this.text,
+  const _InfoBox({
+    required this.label,
+    required this.value,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_rounded, color: AppColors.primary),
-          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              text,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppColors.dark,
-              ),
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(color: Colors.black87),
             ),
           ),
         ],
@@ -129,39 +185,32 @@ class _BulletTile extends StatelessWidget {
   }
 }
 
-class _InfoLine extends StatelessWidget {
-  final String label;
-  final String value;
+// ================= BULLET =================
+class _BulletTile extends StatelessWidget {
+  final String text;
 
-  const _InfoLine({
-    required this.label,
-    required this.value,
-  });
+  const _BulletTile({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppColors.dark,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
             ),
           ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: AppColors.mutedText,
-              height: 1.4,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

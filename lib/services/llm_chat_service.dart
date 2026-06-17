@@ -190,6 +190,15 @@ class LlmChatService {
       },
     ];
 
+    debugPrint("========== OLLAMA ==========");
+    debugPrint("Endpoint: $_llmEndpoint");
+    debugPrint("Model: $_ollamaModel");
+    debugPrint(jsonEncode({
+      'model': _ollamaModel,
+      'messages': messages,
+      'stream': false,
+    }));
+
     final response = await http
         .post(
       Uri.parse(_llmEndpoint),
@@ -197,18 +206,30 @@ class LlmChatService {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'model': _ollamaModel,
-        'messages': messages,
-        'stream': false,
+        "model": _ollamaModel,
+        "messages": messages,
+        "stream": false,
       }),
     )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(minutes: 10));
+    debugPrint("StatusCode: ${response.statusCode}");
+    debugPrint("Body: ${response.body}");
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Erreur Ollama ${response.statusCode}: ${response.body}');
     }
 
-    final decoded = jsonDecode(response.body);
+    final body = response.body.trim();
+
+    Map<String, dynamic> decoded;
+
+    try {
+      decoded = jsonDecode(body);
+    } catch (e) {
+      debugPrint("⚠️ Ollama raw response: $body");
+      throw Exception("Réponse Ollama non JSON");
+    }
+
     final reply = decoded['message']?['content'];
 
     if (reply == null || reply.toString().trim().isEmpty) {

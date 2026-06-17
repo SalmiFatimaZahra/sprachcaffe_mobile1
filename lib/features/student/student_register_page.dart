@@ -37,15 +37,13 @@ class _StudentRegisterPageState
   ];
 
   final List<String> horaires = [
-    "Matin",
-    "Après-midi",
-    "Soir",
+    "En Semaine",
     "Week-end",
   ];
 
   // ================= DONNÉES =================
 
-  String sexe = "Femme";
+  String sexe = "Female";
   bool isLoading = false;
 
   // ================= COURS =================
@@ -63,7 +61,7 @@ class _StudentRegisterPageState
         "niveau": "À déterminer après test",
         "niveauStatus": "pending_test",
         "mode": "Présentiel",
-        "horaire": "Matin",
+        "horaire": "Week-end",
       });
     });
   }
@@ -357,13 +355,13 @@ class _StudentRegisterPageState
                     items: const [
 
                       DropdownMenuItem(
-                        value: "Homme",
-                        child: Text("Homme"),
+                        value: "Male",
+                        child: Text("Male"),
                       ),
 
                       DropdownMenuItem(
-                        value: "Femme",
-                        child: Text("Femme"),
+                        value: "Female",
+                        child: Text("Female"),
                       ),
                     ],
 

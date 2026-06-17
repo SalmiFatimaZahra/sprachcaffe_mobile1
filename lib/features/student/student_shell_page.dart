@@ -47,9 +47,13 @@ class _StudentShellPageState extends State<StudentShellPage> {
 
         if (resolvedLanguage.isEmpty && data["cours"] is List) {
           final courses = data["cours"] as List;
+
           if (courses.isNotEmpty && courses.first is Map) {
-            final firstCourse = Map<String, dynamic>.from(courses.first as Map);
-            resolvedLanguage = (firstCourse["langue"] ?? "").toString();
+            final firstCourse =
+            Map<String, dynamic>.from(courses.first as Map);
+
+            resolvedLanguage =
+                (firstCourse["langue"] ?? "").toString();
           }
         }
 
@@ -66,10 +70,11 @@ class _StudentShellPageState extends State<StudentShellPage> {
     }
   }
 
-  void _openCourseDetails([String title = 'Anglais professionnel']) {
+  // ✅ CORRECT: courseId obligatoire
+  void _openCourseDetails(String courseId) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => StudentCourseDetailsPage(courseTitle: title),
+        builder: (_) => StudentCourseDetailsPage(courseId: courseId),
       ),
     );
   }
@@ -83,6 +88,7 @@ class _StudentShellPageState extends State<StudentShellPage> {
     }
 
     final uid = FirebaseAuth.instance.currentUser!.uid;
+
     final doc = await FirebaseFirestore.instance
         .collection("users")
         .doc(uid)
@@ -118,14 +124,18 @@ class _StudentShellPageState extends State<StudentShellPage> {
     switch (_currentIndex) {
       case 0:
         return StudentHomePage(
-          onOpenCourseDetails: _openCourseDetails,
+          onOpenCourseDetails: (String courseId) {
+            _openCourseDetails(courseId);
+          },
           onOpenLevelTest: _openLevelTest,
           onOpenChatbot: _openChatbot,
         );
 
       case 1:
         return StudentCoursesPage(
-          onOpenCourseDetails: _openCourseDetails,
+          onOpenCourseDetails: (String courseId) {
+            _openCourseDetails(courseId);
+          },
         );
 
       case 2:
@@ -148,7 +158,6 @@ class _StudentShellPageState extends State<StudentShellPage> {
       body: SafeArea(
         child: _buildCurrentPage(),
       ),
-
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openChatbot,
         backgroundColor: AppColors.primary,
@@ -159,7 +168,6 @@ class _StudentShellPageState extends State<StudentShellPage> {
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
-
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {

@@ -57,30 +57,39 @@ class _PaymentPageState extends State<PaymentPage> {
       final data = doc.data();
 
       if (data != null && data["cours"] is List) {
-        selectedCourses = List<Map<String, dynamic>>.from(
-          (data["cours"] as List).map(
-                (e) => Map<String, dynamic>.from(e),
-          ),
+        final allCourses = List<Map<String, dynamic>>.from(
+          (data["cours"] as List)
+              .map((e) => Map<String, dynamic>.from(e)),
         );
+
+        // uniquement les cours non payés
+        selectedCourses = allCourses
+            .where((c) => c["paid"] != true)
+            .toList();
 
         calculateTotal();
       }
 
     } catch (e) {
-      debugPrint("Payment load error: $e");
+      debugPrint(e.toString());
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
   // ================= TOTAL =================
   void calculateTotal() {
-    total = selectedCourses.fold(0, (sum, c) {
-      final lang = c["langue"];
-      return sum + (prices[lang] ?? 1200);
-    });
+    total = 0;
 
-    setState(() {});
+    for (final c in selectedCourses) {
+      total += prices[c["langue"]] ?? 1200;
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   // ================= PAYMENT =================
@@ -115,41 +124,76 @@ class _PaymentPageState extends State<PaymentPage> {
     setState(() => isPaying = true);
 
     try {
+
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception("Utilisateur non connecté");
+      if (user == null) {
+        throw Exception("Utilisateur non connecté");
+      }
 
       final last4 = card.substring(card.length - 4);
 
-      await FirebaseFirestore.instance
+      final userRef = FirebaseFirestore.instance
           .collection("users")
-          .doc(user.uid)
-          .set({
-        "profileCompleted": true,
+          .doc(user.uid);
+
+      final doc = await userRef.get();
+
+      final data = doc.data()!;
+
+      List<Map<String, dynamic>> allCourses =
+      List<Map<String, dynamic>>.from(
+        (data["cours"] as List)
+            .map((e) => Map<String, dynamic>.from(e)),
+      );
+
+      // marquer seulement les cours non payés
+      for (final course in allCourses) {
+        if (course["paid"] != true) {
+          course["paid"] = true;
+        }
+      }
+
+      await userRef.update({
+
+        "cours": allCourses,
+
         "isPaid": true,
+
         "paymentStatus": "Payé",
+
         "payment": {
           "montant": total,
           "date": FieldValue.serverTimestamp(),
-          "cardLast4": last4,
           "cardHolder": name,
+          "cardLast4": last4,
           "expiry": expiry,
-        },
-      }, SetOptions(merge: true));
+        }
 
-      final doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(user.uid)
-          .get();
+      });
 
-      final role = doc.data()?["role"] ?? "student";
+      final role = data["role"] ?? "student";
 
       UserRole userRole = UserRole.student;
-      if (role == "teacher") userRole = UserRole.teacher;
-      if (role == "admin") userRole = UserRole.admin;
+
+      if (role == "teacher") {
+        userRole = UserRole.teacher;
+      }
+
+      if (role == "admin") {
+        userRole = UserRole.admin;
+      }
 
       if (!mounted) return;
 
       AppNavigator.openDashboard(context, userRole);
+
+    } catch (e) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur paiement : $e"),
+        ),
+      );
 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
