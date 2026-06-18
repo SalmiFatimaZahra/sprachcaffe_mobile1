@@ -160,66 +160,108 @@ class AdminService {
     String? assignedLanguage,
     List<String> assignedLevels = const [],
   }) async {
+    final cleanName = name.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanPassword = password.trim();
     final cleanRole = role.trim().toLowerCase();
+    final currentAdmin = FirebaseAuth.instance.currentUser;
+
+    if (currentAdmin == null) {
+      throw Exception('La session administrateur a expiré. Reconnectez-vous.');
+    }
 
     if (cleanRole != 'teacher' && cleanRole != 'admin') {
       throw Exception('Seul un compte prof ou admin peut être créé ici.');
     }
 
+    if (cleanName.isEmpty || cleanEmail.isEmpty || cleanPassword.isEmpty) {
+      throw Exception('Le nom, l’email et le mot de passe sont obligatoires.');
+    }
+
+    final cleanLevels = assignedLevels
+        .map((level) => level.trim().toUpperCase())
+        .where((level) => level.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    final cleanLanguage = _cleanText(assignedLanguage);
+
     if (cleanRole == 'teacher') {
-      if (_cleanText(assignedLanguage).isEmpty || assignedLevels.isEmpty) {
-        throw Exception('Veuillez affecter une langue et au moins un niveau au professeur.');
+      if (cleanLanguage.isEmpty || cleanLevels.isEmpty) {
+        throw Exception(
+          'Veuillez affecter une langue et au moins un niveau au professeur.',
+        );
       }
     }
 
-    const secondaryAppName = 'adminAccountCreator';
-    FirebaseApp secondaryApp;
+    final appName =
+        'adminAccountCreator_${DateTime.now().microsecondsSinceEpoch}';
+    final secondaryApp = await Firebase.initializeApp(
+      name: appName,
+      options: Firebase.app().options,
+    );
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+    User? createdUser;
+    bool firestoreDocumentCreated = false;
 
     try {
-      secondaryApp = Firebase.app(secondaryAppName);
-    } catch (_) {
-      secondaryApp = await Firebase.initializeApp(
-        name: secondaryAppName,
-        options: DefaultFirebaseOptions.currentPlatform,
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: cleanEmail,
+        password: cleanPassword,
       );
+
+      createdUser = credential.user;
+      if (createdUser == null) {
+        throw Exception('Impossible de créer le compte Firebase Auth.');
+      }
+
+      await createdUser.updateDisplayName(cleanName);
+
+      final data = <String, dynamic>{
+        'uid': createdUser.uid,
+        'name': cleanName,
+        'email': cleanEmail,
+        'role': cleanRole,
+        'status': 'active',
+        'profileCompleted': true,
+        'isPaid': true,
+        'paymentStatus': 'Not required',
+        'createdBy': currentAdmin.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (cleanRole == 'teacher') {
+        data.addAll({
+          'assignedLanguage': cleanLanguage,
+          'assignedLevels': cleanLevels,
+        });
+      }
+
+      await _usersCollection.doc(createdUser.uid).set(data);
+      firestoreDocumentCreated = true;
+    } catch (_) {
+      // Évite un compte présent dans Firebase Auth mais absent de la liste
+      // Firestore lorsque l'écriture du document échoue.
+      if (createdUser != null && !firestoreDocumentCreated) {
+        try {
+          await createdUser.delete();
+        } catch (_) {
+          // Le message d'origine reste prioritaire.
+        }
+      }
+      rethrow;
+    } finally {
+      try {
+        await secondaryAuth.signOut();
+      } catch (_) {}
+
+      try {
+        await secondaryApp.delete();
+      } catch (_) {}
     }
-
-    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-    final credential = await secondaryAuth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password.trim(),
-    );
-
-    final user = credential.user;
-    if (user == null) {
-      throw Exception('Impossible de créer le compte Firebase Auth.');
-    }
-
-    await user.updateDisplayName(name.trim());
-    await secondaryAuth.signOut();
-
-    final data = <String, dynamic>{
-      'uid': user.uid,
-      'name': name.trim(),
-      'email': email.trim(),
-      'role': cleanRole,
-      'status': 'active',
-      'profileCompleted': true,
-      'isPaid': true,
-      'paymentStatus': 'Not required',
-      'createdBy': FirebaseAuth.instance.currentUser?.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    if (cleanRole == 'teacher') {
-      data.addAll({
-        'assignedLanguage': assignedLanguage!.trim(),
-        'assignedLevels': assignedLevels,
-      });
-    }
-
-    await _usersCollection.doc(user.uid).set(data);
   }
 
   Future<void> updateUserRole({
@@ -375,9 +417,9 @@ class AdminService {
   }
 
   static int _sortByCreatedAtDesc(
-    QueryDocumentSnapshot<Map<String, dynamic>> a,
-    QueryDocumentSnapshot<Map<String, dynamic>> b,
-  ) {
+      QueryDocumentSnapshot<Map<String, dynamic>> a,
+      QueryDocumentSnapshot<Map<String, dynamic>> b,
+      ) {
     final ad = _extractDate(a.data());
     final bd = _extractDate(b.data());
     return bd.compareTo(ad);
