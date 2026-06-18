@@ -57,12 +57,12 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                   ),
                   const SizedBox(height: 12),
                   CustomButton(
-                    label: 'Créer un compte',
+                    label: 'Créer un compte étudiant',
                     outlined: true,
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => RegisterPage(selectedRole: _selectedRole),
+                          builder: (_) => const RegisterPage(selectedRole: UserRole.student),
                         ),
                       );
                     },

@@ -1,4 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import '../firebase_options.dart';
 
 class AdminStats {
   final int usersCount;
@@ -34,6 +38,24 @@ class AdminStats {
 
 class AdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static const List<String> availableLanguages = [
+    'Français',
+    'Anglais',
+    'Espagnol',
+    'Allemand',
+    'Italien',
+    'Arabe',
+  ];
+
+  static const List<String> availableLevels = [
+    'A1',
+    'A2',
+    'B1',
+    'B2',
+    'C1',
+    'C2',
+  ];
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
@@ -130,6 +152,76 @@ class AdminService {
     );
   }
 
+  Future<void> createStaffAccount({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? assignedLanguage,
+    List<String> assignedLevels = const [],
+  }) async {
+    final cleanRole = role.trim().toLowerCase();
+
+    if (cleanRole != 'teacher' && cleanRole != 'admin') {
+      throw Exception('Seul un compte prof ou admin peut être créé ici.');
+    }
+
+    if (cleanRole == 'teacher') {
+      if (_cleanText(assignedLanguage).isEmpty || assignedLevels.isEmpty) {
+        throw Exception('Veuillez affecter une langue et au moins un niveau au professeur.');
+      }
+    }
+
+    const secondaryAppName = 'adminAccountCreator';
+    FirebaseApp secondaryApp;
+
+    try {
+      secondaryApp = Firebase.app(secondaryAppName);
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: secondaryAppName,
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+    final credential = await secondaryAuth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password.trim(),
+    );
+
+    final user = credential.user;
+    if (user == null) {
+      throw Exception('Impossible de créer le compte Firebase Auth.');
+    }
+
+    await user.updateDisplayName(name.trim());
+    await secondaryAuth.signOut();
+
+    final data = <String, dynamic>{
+      'uid': user.uid,
+      'name': name.trim(),
+      'email': email.trim(),
+      'role': cleanRole,
+      'status': 'active',
+      'profileCompleted': true,
+      'isPaid': true,
+      'paymentStatus': 'Not required',
+      'createdBy': FirebaseAuth.instance.currentUser?.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (cleanRole == 'teacher') {
+      data.addAll({
+        'assignedLanguage': assignedLanguage!.trim(),
+        'assignedLevels': assignedLevels,
+      });
+    }
+
+    await _usersCollection.doc(user.uid).set(data);
+  }
+
   Future<void> updateUserRole({
     required String userId,
     required String role,
@@ -171,6 +263,18 @@ class AdminService {
     }, SetOptions(merge: true));
   }
 
+  Future<void> updateTeacherAssignment({
+    required String userId,
+    required String? assignedLanguage,
+    required List<String> assignedLevels,
+  }) async {
+    await _usersCollection.doc(userId).set({
+      'assignedLanguage': assignedLanguage,
+      'assignedLevels': assignedLevels,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Future<void> deleteUserDocument(String userId) async {
     await _usersCollection.doc(userId).delete();
   }
@@ -178,6 +282,7 @@ class AdminService {
   Future<void> addCourse({
     required String title,
     required String description,
+    required String language,
     required String level,
     String? teacherId,
     String? teacherEmail,
@@ -188,6 +293,7 @@ class AdminService {
     await _coursesCollection.add({
       'title': title,
       'description': description,
+      'language': language,
       'level': level,
       'teacherId': teacherId,
       'teacherEmail': teacherEmail,
@@ -206,6 +312,7 @@ class AdminService {
     required String courseId,
     required String title,
     required String description,
+    required String language,
     required String level,
     String? teacherId,
     String? teacherEmail,
@@ -216,6 +323,7 @@ class AdminService {
     await _coursesCollection.doc(courseId).set({
       'title': title,
       'description': description,
+      'language': language,
       'level': level,
       'teacherId': teacherId,
       'teacherEmail': teacherEmail,
@@ -253,15 +361,23 @@ class AdminService {
         : 'Email non renseigné';
   }
 
+  static List<String> cleanStringList(dynamic value) {
+    if (value is List) {
+      return value.map((item) => _cleanText(item)).where((item) => item.isNotEmpty).toList();
+    }
+    final text = _cleanText(value);
+    return text.isEmpty ? <String>[] : <String>[text];
+  }
+
   static String _cleanText(dynamic value) {
     if (value == null) return '';
     return value.toString().trim();
   }
 
   static int _sortByCreatedAtDesc(
-      QueryDocumentSnapshot<Map<String, dynamic>> a,
-      QueryDocumentSnapshot<Map<String, dynamic>> b,
-      ) {
+    QueryDocumentSnapshot<Map<String, dynamic>> a,
+    QueryDocumentSnapshot<Map<String, dynamic>> b,
+  ) {
     final ad = _extractDate(a.data());
     final bd = _extractDate(b.data());
     return bd.compareTo(ad);

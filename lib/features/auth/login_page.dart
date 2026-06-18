@@ -77,23 +77,12 @@ class _LoginPageState extends State<LoginPage> {
 
       final doc = await docRef.get();
 
-      // ❌ SI USER N'EXISTE PAS → ON LE CRÉE
+      // Aucun document Firestore = compte non validé par la logique métier.
+      // Les étudiants passent par RegisterPage, les profs/admins sont créés par l'admin.
       if (!doc.exists) {
-        await docRef.set({
-          "role": "student",
-          "profileCompleted": false,
-          "isPaid": false,
-          "createdAt": FieldValue.serverTimestamp(),
-        });
-
+        await FirebaseAuth.instance.signOut();
         if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StudentRegisterPage(),
-          ),
-        );
+        _showMessage("Compte non configuré. Utilise l'inscription étudiant ou contacte l'admin.");
         return;
       }
 
@@ -215,8 +204,8 @@ class _LoginPageState extends State<LoginPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => RegisterPage(
-                          selectedRole: widget.selectedRole,
+                        builder: (_) => const RegisterPage(
+                          selectedRole: UserRole.student,
                         ),
                       ),
                     );

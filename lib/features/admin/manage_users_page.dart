@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_text_field.dart';
 import '../../widgets/premium_header.dart';
 import '../../widgets/section_title.dart';
 
@@ -28,8 +30,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   }
 
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _filterUsers(
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-      ) {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
     return docs.where((doc) {
       final data = doc.data();
       final role = _text(data['role']).toLowerCase();
@@ -44,14 +46,229 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     }).toList();
   }
 
+  Future<void> _openCreateStaffDialog() async {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    String role = 'teacher';
+    String selectedLanguage = AdminService.availableLanguages.first;
+    final selectedLevels = <String>{};
+    bool isLoading = false;
+
+    final bool? created = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: const Text(
+                'Créer un compte interne',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.dark,
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Seul l’admin peut créer les comptes professeur et administrateur.',
+                        style: TextStyle(color: AppColors.mutedText, height: 1.4),
+                      ),
+                      const SizedBox(height: 16),
+                      CustomTextField(
+                        controller: nameController,
+                        label: 'Nom complet',
+                        hintText: 'Ex. Ahmed Benali',
+                        prefixIcon: Icons.person_outline_rounded,
+                      ),
+                      const SizedBox(height: 14),
+                      CustomTextField(
+                        controller: emailController,
+                        label: 'Email',
+                        hintText: 'prof@academy.com',
+                        prefixIcon: Icons.mail_outline_rounded,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 14),
+                      CustomTextField(
+                        controller: passwordController,
+                        label: 'Mot de passe provisoire',
+                        hintText: 'Minimum 6 caractères',
+                        prefixIcon: Icons.lock_outline_rounded,
+                        obscureText: true,
+                      ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        value: role,
+                        decoration: _inputDecoration('Rôle', Icons.badge_rounded),
+                        items: const [
+                          DropdownMenuItem(value: 'teacher', child: Text('Prof')),
+                          DropdownMenuItem(value: 'admin', child: Text('Administrateur')),
+                        ],
+                        onChanged: isLoading
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setDialogState(() => role = value);
+                              },
+                      ),
+                      if (role == 'teacher') ...[
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String>(
+                          value: selectedLanguage,
+                          decoration: _inputDecoration('Langue prise en charge', Icons.language_rounded),
+                          items: AdminService.availableLanguages
+                              .map(
+                                (language) => DropdownMenuItem(
+                                  value: language,
+                                  child: Text(language),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: isLoading
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
+                                  setDialogState(() => selectedLanguage = value);
+                                },
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'Niveaux autorisés dans cette langue',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.dark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: AdminService.availableLevels.map((level) {
+                            final selected = selectedLevels.contains(level);
+                            return FilterChip(
+                              label: Text(level),
+                              selected: selected,
+                              selectedColor: AppColors.primarySoft,
+                              onSelected: isLoading
+                                  ? null
+                                  : (value) {
+                                      setDialogState(() {
+                                        if (value) {
+                                          selectedLevels.add(level);
+                                        } else {
+                                          selectedLevels.remove(level);
+                                        }
+                                      });
+                                    },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Annuler'),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: Text(isLoading ? 'Création...' : 'Créer'),
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
+                          final email = emailController.text.trim();
+                          final password = passwordController.text.trim();
+
+                          if (name.isEmpty || email.isEmpty || password.isEmpty) {
+                            _showMessage('Veuillez remplir le nom, l’email et le mot de passe.');
+                            return;
+                          }
+
+                          if (password.length < 6) {
+                            _showMessage('Le mot de passe doit contenir au moins 6 caractères.');
+                            return;
+                          }
+
+                          if (role == 'teacher' && selectedLevels.isEmpty) {
+                            _showMessage('Sélectionne au moins un niveau pour le professeur.');
+                            return;
+                          }
+
+                          setDialogState(() => isLoading = true);
+
+                          try {
+                            await _adminService.createStaffAccount(
+                              name: name,
+                              email: email,
+                              password: password,
+                              role: role,
+                              assignedLanguage: role == 'teacher' ? selectedLanguage : null,
+                              assignedLevels: role == 'teacher' ? selectedLevels.toList() : <String>[],
+                            );
+
+                            if (!dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop(true);
+                          } on FirebaseAuthException catch (e) {
+                            var message = 'Erreur de création.';
+                            if (e.code == 'email-already-in-use') {
+                              message = 'Cet email est déjà utilisé.';
+                            } else if (e.code == 'invalid-email') {
+                              message = 'Adresse email invalide.';
+                            } else if (e.code == 'weak-password') {
+                              message = 'Mot de passe trop faible.';
+                            }
+                            _showMessage(message);
+                          } catch (e) {
+                            _showMessage('Erreur: $e');
+                          } finally {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => isLoading = false);
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+
+    if (created == true) {
+      _showMessage('Compte créé avec succès.');
+    }
+  }
+
   Future<void> _openUserActions(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     final data = doc.data();
-    String role = _normalizeRole(data['role']);
+    final originalRole = _normalizeRole(data['role']);
+    String role = originalRole;
     String status = _normalizeStatus(data['status']);
     bool isPaid = data['isPaid'] == true;
     bool profileCompleted = data['profileCompleted'] == true;
+    String? assignedLanguage = _emptyToNull(data['assignedLanguage']) ?? AdminService.availableLanguages.first;
+    final assignedLevels = AdminService.cleanStringList(data['assignedLevels']).toSet();
     bool isLoading = false;
 
     await showModalBottomSheet<void>(
@@ -102,9 +319,14 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       onChanged: isLoading
                           ? null
                           : (value) {
-                        if (value == null) return;
-                        setSheetState(() => role = value);
-                      },
+                              if (value == null) return;
+                              setSheetState(() {
+                                role = value;
+                                if (role == 'teacher' && assignedLanguage == null) {
+                                  assignedLanguage = AdminService.availableLanguages.first;
+                                }
+                              });
+                            },
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
@@ -118,35 +340,90 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       onChanged: isLoading
                           ? null
                           : (value) {
-                        if (value == null) return;
-                        setSheetState(() => status = value);
-                      },
+                              if (value == null) return;
+                              setSheetState(() => status = value);
+                            },
                     ),
-                    const SizedBox(height: 10),
-                    SwitchListTile(
-                      value: profileCompleted,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Profil étudiant complété',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                    if (role == 'teacher') ...[
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        value: assignedLanguage,
+                        decoration: _inputDecoration('Langue prise en charge', Icons.language_rounded),
+                        items: AdminService.availableLanguages
+                            .map(
+                              (language) => DropdownMenuItem(
+                                value: language,
+                                child: Text(language),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setSheetState(() => assignedLanguage = value);
+                              },
                       ),
-                      subtitle: const Text('Contrôle le passage vers le paiement.'),
-                      onChanged: isLoading
-                          ? null
-                          : (value) => setSheetState(() => profileCompleted = value),
-                    ),
-                    SwitchListTile(
-                      value: isPaid,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Paiement validé',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Niveaux que ce prof peut prendre en charge',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.dark,
+                        ),
                       ),
-                      subtitle: const Text('Permet à l’étudiant d’accéder au dashboard.'),
-                      onChanged: isLoading
-                          ? null
-                          : (value) => setSheetState(() => isPaid = value),
-                    ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: AdminService.availableLevels.map((level) {
+                          final selected = assignedLevels.contains(level);
+                          return FilterChip(
+                            label: Text(level),
+                            selected: selected,
+                            selectedColor: AppColors.primarySoft,
+                            onSelected: isLoading
+                                ? null
+                                : (value) {
+                                    setSheetState(() {
+                                      if (value) {
+                                        assignedLevels.add(level);
+                                      } else {
+                                        assignedLevels.remove(level);
+                                      }
+                                    });
+                                  },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                    if (role == 'student') ...[
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        value: profileCompleted,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Profil étudiant complété',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        subtitle: const Text('Contrôle le passage vers le paiement.'),
+                        onChanged: isLoading
+                            ? null
+                            : (value) => setSheetState(() => profileCompleted = value),
+                      ),
+                      SwitchListTile(
+                        value: isPaid,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Paiement validé',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        subtitle: const Text('Permet à l’étudiant d’accéder au dashboard.'),
+                        onChanged: isLoading
+                            ? null
+                            : (value) => setSheetState(() => isPaid = value),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     CustomButton(
                       label: isLoading ? 'Enregistrement...' : 'Enregistrer les modifications',
@@ -154,37 +431,53 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       onPressed: isLoading
                           ? null
                           : () async {
-                        setSheetState(() => isLoading = true);
-                        try {
-                          await _adminService.updateUserRole(
-                            userId: doc.id,
-                            role: role,
-                          );
-                          await _adminService.updateUserStatus(
-                            userId: doc.id,
-                            status: status,
-                          );
-                          await _adminService.updateProfileCompleted(
-                            userId: doc.id,
-                            profileCompleted: profileCompleted,
-                          );
-                          await _adminService.updateStudentPayment(
-                            userId: doc.id,
-                            isPaid: isPaid,
-                          );
+                              if (role == 'teacher' && assignedLevels.isEmpty) {
+                                _message('Sélectionne au moins un niveau pour ce professeur.');
+                                return;
+                              }
 
-                          if (!sheetContext.mounted) return;
-                          Navigator.of(sheetContext).pop();
-                          _message('Utilisateur mis à jour.');
-                        } catch (e) {
-                          if (!sheetContext.mounted) return;
-                          _message('Erreur: $e');
-                        } finally {
-                          if (sheetContext.mounted) {
-                            setSheetState(() => isLoading = false);
-                          }
-                        }
-                      },
+                              setSheetState(() => isLoading = true);
+                              try {
+                                await _adminService.updateUserRole(
+                                  userId: doc.id,
+                                  role: role,
+                                );
+                                await _adminService.updateUserStatus(
+                                  userId: doc.id,
+                                  status: status,
+                                );
+
+                                if (role == 'student') {
+                                  await _adminService.updateProfileCompleted(
+                                    userId: doc.id,
+                                    profileCompleted: profileCompleted,
+                                  );
+                                  await _adminService.updateStudentPayment(
+                                    userId: doc.id,
+                                    isPaid: isPaid,
+                                  );
+                                }
+
+                                if (role == 'teacher' || originalRole == 'teacher') {
+                                  await _adminService.updateTeacherAssignment(
+                                    userId: doc.id,
+                                    assignedLanguage: role == 'teacher' ? assignedLanguage : null,
+                                    assignedLevels: role == 'teacher' ? assignedLevels.toList() : <String>[],
+                                  );
+                                }
+
+                                if (!sheetContext.mounted) return;
+                                Navigator.of(sheetContext).pop();
+                                _message('Utilisateur mis à jour.');
+                              } catch (e) {
+                                if (!sheetContext.mounted) return;
+                                _message('Erreur: $e');
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setSheetState(() => isLoading = false);
+                                }
+                              }
+                            },
                     ),
                     const SizedBox(height: 10),
                     CustomButton(
@@ -195,22 +488,22 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       onPressed: isLoading
                           ? null
                           : () async {
-                        final confirm = await _confirmDelete(sheetContext);
-                        if (confirm != true) return;
+                              final confirm = await _confirmDelete(sheetContext);
+                              if (confirm != true) return;
 
-                        try {
-                          await _adminService.deleteUserDocument(doc.id);
-                          if (!sheetContext.mounted) return;
-                          Navigator.of(sheetContext).pop();
-                          _message('Document utilisateur supprimé.');
-                        } catch (e) {
-                          _message('Erreur: $e');
-                        }
-                      },
+                              try {
+                                await _adminService.deleteUserDocument(doc.id);
+                                if (!sheetContext.mounted) return;
+                                Navigator.of(sheetContext).pop();
+                                _message('Document utilisateur supprimé.');
+                              } catch (e) {
+                                _message('Erreur: $e');
+                              }
+                            },
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Note: cette suppression retire le document Firestore. La suppression du compte Firebase Auth nécessite une Cloud Function ou Firebase Admin SDK.',
+                      'Note: cette suppression retire seulement le document Firestore. La suppression totale du compte Auth nécessite Firebase Admin SDK ou Cloud Function.',
                       style: TextStyle(
                         color: AppColors.mutedText,
                         height: 1.4,
@@ -256,6 +549,13 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     );
   }
 
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -267,12 +567,17 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return SingleChildScrollView(
           child: Column(
             children: [
-              const PremiumHeader(
+              PremiumHeader(
                 badge: 'Gestion des utilisateurs',
                 title: 'Comptes et privilèges',
                 subtitle:
-                'L’admin peut visualiser les comptes, changer les rôles, valider les paiements et gérer les statuts.',
+                    'L’admin crée les comptes prof/admin, affecte les profs à une langue et définit plusieurs niveaux autorisés.',
                 icon: Icons.people_rounded,
+                bottom: CustomButton(
+                  label: 'Créer compte prof/admin',
+                  icon: Icons.person_add_alt_1_rounded,
+                  onPressed: _openCreateStaffDialog,
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 110),
@@ -313,55 +618,57 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                         ),
                       )
                     else if (snapshot.hasError)
-                      _InfoBox(
-                        text:
-                        'Erreur de chargement. Vérifie les règles Firestore.',
+                      const _InfoBox(
+                        text: 'Erreur de chargement. Vérifie les règles Firestore.',
                         danger: true,
                       )
                     else if (users.isEmpty)
-                        const _InfoBox(text: 'Aucun utilisateur trouvé.')
-                      else
-                        ...users.map((doc) {
-                          final data = doc.data();
-                          final role = _normalizeRole(data['role']);
-                          final status = _normalizeStatus(data['status']);
-                          final isPaid = data['isPaid'] == true;
+                      const _InfoBox(text: 'Aucun utilisateur trouvé.')
+                    else
+                      ...users.map((doc) {
+                        final data = doc.data();
+                        final role = _normalizeRole(data['role']);
+                        final status = _normalizeStatus(data['status']);
+                        final isPaid = data['isPaid'] == true;
+                        final assignment = _teacherAssignmentLabel(data);
 
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              onTap: () => _openUserActions(doc),
-                              tileColor: Colors.white,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(22),
-                                side: const BorderSide(color: AppColors.border),
-                              ),
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.primarySoft,
-                                child: Icon(_roleIcon(role), color: AppColors.dark),
-                              ),
-                              title: Text(
-                                AdminService.displayName(data),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.dark,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${_roleLabel(role)} • $status • ${AdminService.displayEmail(data)}${role == 'student' ? ' • ${isPaid ? 'Payé' : 'Non payé'}' : ''}',
-                                style: const TextStyle(
-                                  color: AppColors.mutedText,
-                                  height: 1.35,
-                                ),
-                              ),
-                              trailing: const Icon(Icons.tune_rounded),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ListTile(
+                            onTap: () => _openUserActions(doc),
+                            tileColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
                             ),
-                          );
-                        }),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                              side: const BorderSide(color: AppColors.border),
+                            ),
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.primarySoft,
+                              child: Icon(_roleIcon(role), color: AppColors.dark),
+                            ),
+                            title: Text(
+                              AdminService.displayName(data),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.dark,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${_roleLabel(role)} • $status • ${AdminService.displayEmail(data)}'
+                              '${role == 'student' ? ' • ${isPaid ? 'Payé' : 'Non payé'}' : ''}'
+                              '${role == 'teacher' ? ' • $assignment' : ''}',
+                              style: const TextStyle(
+                                color: AppColors.mutedText,
+                                height: 1.35,
+                              ),
+                            ),
+                            trailing: const Icon(Icons.tune_rounded),
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),
@@ -460,6 +767,11 @@ InputDecoration _inputDecoration(String label, IconData icon) {
 
 String _text(dynamic value) => value?.toString().trim() ?? '';
 
+String? _emptyToNull(dynamic value) {
+  final text = _text(value);
+  return text.isEmpty ? null : text;
+}
+
 String _normalizeRole(dynamic role) {
   final value = _text(role).toLowerCase();
   if (value == 'teacher' || value == 'admin' || value == 'student') {
@@ -498,4 +810,15 @@ String _normalizeStatus(dynamic status) {
     return value;
   }
   return 'active';
+}
+
+String _teacherAssignmentLabel(Map<String, dynamic> data) {
+  final language = _text(data['assignedLanguage']);
+  final levels = AdminService.cleanStringList(data['assignedLevels']);
+
+  if (language.isEmpty && levels.isEmpty) {
+    return 'Aucune affectation';
+  }
+
+  return '${language.isEmpty ? 'Langue non définie' : language} ${levels.isEmpty ? '' : levels.join(', ')}'.trim();
 }

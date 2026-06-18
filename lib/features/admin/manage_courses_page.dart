@@ -24,12 +24,19 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
     final courseData = courseDoc?.data() ?? <String, dynamic>{};
     final titleController = TextEditingController(text: _text(courseData['title']));
     final descriptionController = TextEditingController(text: _text(courseData['description']));
-    final levelController = TextEditingController(text: _text(courseData['level']));
     final nextSessionController = TextEditingController(
       text: _text(courseData['nextSession']) == 'Non programmée'
           ? ''
           : _text(courseData['nextSession']),
     );
+
+    String selectedLanguage = _text(courseData['language']).isNotEmpty
+        ? _text(courseData['language'])
+        : AdminService.availableLanguages.first;
+    String selectedLevel = _text(courseData['level']).isNotEmpty
+        ? _text(courseData['level'])
+        : AdminService.availableLevels.first;
+    List<String> allowedLevels = [...AdminService.availableLevels];
 
     String? selectedTeacherId = _emptyToNull(courseData['teacherId']);
     String? selectedTeacherEmail = _emptyToNull(courseData['teacherEmail']);
@@ -75,20 +82,6 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                         maxLines: 3,
                       ),
                       const SizedBox(height: 14),
-                      CustomTextField(
-                        controller: levelController,
-                        label: 'Niveau',
-                        hintText: 'Ex. A1, A2, B1, B2, C1',
-                        prefixIcon: Icons.signal_cellular_alt_rounded,
-                      ),
-                      const SizedBox(height: 14),
-                      CustomTextField(
-                        controller: nextSessionController,
-                        label: 'Prochaine séance',
-                        hintText: 'Ex. Lundi 18:00 - Salle 2',
-                        prefixIcon: Icons.event_rounded,
-                      ),
-                      const SizedBox(height: 14),
                       StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                         stream: _adminService.getUsersStream(),
                         builder: (context, snapshot) {
@@ -114,10 +107,11 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                               ),
                               ...teachers.map((doc) {
                                 final data = doc.data();
+                                final assignment = _teacherAssignmentLabel(data);
                                 return DropdownMenuItem<String>(
                                   value: doc.id,
                                   child: Text(
-                                    '${AdminService.displayName(data)} - ${AdminService.displayEmail(data)}',
+                                    '${AdminService.displayName(data)} - $assignment',
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 );
@@ -126,26 +120,89 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                             onChanged: isLoading
                                 ? null
                                 : (value) {
-                              if (value == null || value == 'none') {
-                                setDialogState(() {
-                                  selectedTeacherId = null;
-                                  selectedTeacherEmail = null;
-                                  selectedTeacherName = null;
-                                });
-                                return;
-                              }
+                                    if (value == null || value == 'none') {
+                                      setDialogState(() {
+                                        selectedTeacherId = null;
+                                        selectedTeacherEmail = null;
+                                        selectedTeacherName = null;
+                                        allowedLevels = [...AdminService.availableLevels];
+                                      });
+                                      return;
+                                    }
 
-                              final teacherDoc = teachers.firstWhere((doc) => doc.id == value);
-                              final data = teacherDoc.data();
+                                    final teacherDoc = teachers.firstWhere((doc) => doc.id == value);
+                                    final data = teacherDoc.data();
+                                    final teacherLanguage = _text(data['assignedLanguage']);
+                                    final teacherLevels = AdminService.cleanStringList(data['assignedLevels']);
 
-                              setDialogState(() {
-                                selectedTeacherId = teacherDoc.id;
-                                selectedTeacherEmail = AdminService.displayEmail(data);
-                                selectedTeacherName = AdminService.displayName(data);
-                              });
-                            },
+                                    setDialogState(() {
+                                      selectedTeacherId = teacherDoc.id;
+                                      selectedTeacherEmail = AdminService.displayEmail(data);
+                                      selectedTeacherName = AdminService.displayName(data);
+                                      if (teacherLanguage.isNotEmpty) {
+                                        selectedLanguage = teacherLanguage;
+                                      }
+                                      if (teacherLevels.isNotEmpty) {
+                                        allowedLevels = teacherLevels;
+                                        if (!allowedLevels.contains(selectedLevel)) {
+                                          selectedLevel = allowedLevels.first;
+                                        }
+                                      } else {
+                                        allowedLevels = [...AdminService.availableLevels];
+                                      }
+                                    });
+                                  },
                           );
                         },
+                      ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        value: AdminService.availableLanguages.contains(selectedLanguage)
+                            ? selectedLanguage
+                            : AdminService.availableLanguages.first,
+                        decoration: _inputDecoration('Langue', Icons.language_rounded),
+                        items: AdminService.availableLanguages
+                            .map(
+                              (language) => DropdownMenuItem(
+                                value: language,
+                                child: Text(language),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setDialogState(() => selectedLanguage = value);
+                              },
+                      ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        value: allowedLevels.contains(selectedLevel)
+                            ? selectedLevel
+                            : allowedLevels.first,
+                        decoration: _inputDecoration('Niveau', Icons.signal_cellular_alt_rounded),
+                        items: allowedLevels
+                            .map(
+                              (level) => DropdownMenuItem(
+                                value: level,
+                                child: Text(level),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setDialogState(() => selectedLevel = value);
+                              },
+                      ),
+                      const SizedBox(height: 14),
+                      CustomTextField(
+                        controller: nextSessionController,
+                        label: 'Prochaine séance',
+                        hintText: 'Ex. Lundi 18:00 - Salle 2',
+                        prefixIcon: Icons.event_rounded,
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
@@ -159,9 +216,9 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                         onChanged: isLoading
                             ? null
                             : (value) {
-                          if (value == null) return;
-                          setDialogState(() => status = value);
-                        },
+                                if (value == null) return;
+                                setDialogState(() => status = value);
+                              },
                       ),
                     ],
                   ),
@@ -178,53 +235,54 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                   onPressed: isLoading
                       ? null
                       : () async {
-                    final title = titleController.text.trim();
-                    final description = descriptionController.text.trim();
-                    final level = levelController.text.trim();
+                          final title = titleController.text.trim();
+                          final description = descriptionController.text.trim();
 
-                    if (title.isEmpty || description.isEmpty || level.isEmpty) {
-                      _showMessage('Veuillez remplir le titre, la description et le niveau.');
-                      return;
-                    }
+                          if (title.isEmpty || description.isEmpty) {
+                            _showMessage('Veuillez remplir le titre et la description.');
+                            return;
+                          }
 
-                    setDialogState(() => isLoading = true);
+                          setDialogState(() => isLoading = true);
 
-                    try {
-                      if (courseDoc == null) {
-                        await _adminService.addCourse(
-                          title: title,
-                          description: description,
-                          level: level,
-                          teacherId: selectedTeacherId,
-                          teacherEmail: selectedTeacherEmail,
-                          teacherName: selectedTeacherName,
-                          nextSession: nextSessionController.text,
-                          status: status,
-                        );
-                      } else {
-                        await _adminService.updateCourse(
-                          courseId: courseDoc.id,
-                          title: title,
-                          description: description,
-                          level: level,
-                          teacherId: selectedTeacherId,
-                          teacherEmail: selectedTeacherEmail,
-                          teacherName: selectedTeacherName,
-                          nextSession: nextSessionController.text,
-                          status: status,
-                        );
-                      }
+                          try {
+                            if (courseDoc == null) {
+                              await _adminService.addCourse(
+                                title: title,
+                                description: description,
+                                language: selectedLanguage,
+                                level: selectedLevel,
+                                teacherId: selectedTeacherId,
+                                teacherEmail: selectedTeacherEmail,
+                                teacherName: selectedTeacherName,
+                                nextSession: nextSessionController.text,
+                                status: status,
+                              );
+                            } else {
+                              await _adminService.updateCourse(
+                                courseId: courseDoc.id,
+                                title: title,
+                                description: description,
+                                language: selectedLanguage,
+                                level: selectedLevel,
+                                teacherId: selectedTeacherId,
+                                teacherEmail: selectedTeacherEmail,
+                                teacherName: selectedTeacherName,
+                                nextSession: nextSessionController.text,
+                                status: status,
+                              );
+                            }
 
-                      if (!dialogContext.mounted) return;
-                      Navigator.of(dialogContext).pop(true);
-                    } catch (e) {
-                      _showMessage('Erreur: $e');
-                    } finally {
-                      if (dialogContext.mounted) {
-                        setDialogState(() => isLoading = false);
-                      }
-                    }
-                  },
+                            if (!dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop(true);
+                          } catch (e) {
+                            _showMessage('Erreur: $e');
+                          } finally {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => isLoading = false);
+                            }
+                          }
+                        },
                 ),
               ],
             );
@@ -235,7 +293,6 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
 
     titleController.dispose();
     descriptionController.dispose();
-    levelController.dispose();
     nextSessionController.dispose();
 
     if (saved == true) {
@@ -293,7 +350,7 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                 badge: 'Gestion des cours',
                 title: 'Catalogue de formation',
                 subtitle:
-                'Créer, modifier, affecter à un professeur, activer ou supprimer les cours du centre.',
+                    'Créer, modifier, affecter à un professeur, définir la langue et le niveau du cours.',
                 icon: Icons.book_rounded,
                 bottom: CustomButton(
                   label: 'Ajouter un cours',
@@ -321,119 +378,123 @@ class _ManageCoursesPageState extends State<ManageCoursesPage> {
                         danger: true,
                       )
                     else if (courses.isEmpty)
-                        const _InfoBox(
-                          text: 'Aucun cours pour le moment. Clique sur Ajouter un cours.',
-                        )
-                      else
-                        ...courses.map((doc) {
-                          final data = doc.data();
-                          final title = _text(data['title']).isEmpty
-                              ? 'Cours sans titre'
-                              : _text(data['title']);
-                          final description = _text(data['description']).isEmpty
-                              ? 'Aucune description.'
-                              : _text(data['description']);
-                          final level = _text(data['level']).isEmpty
-                              ? 'Niveau non défini'
-                              : _text(data['level']);
-                          final status = _normalizeStatus(data['status']);
-                          final teacher = _text(data['teacherName']).isNotEmpty
-                              ? _text(data['teacherName'])
-                              : _text(data['teacherEmail']).isNotEmpty
-                              ? _text(data['teacherEmail'])
-                              : 'Prof non affecté';
-                          final nextSession = _text(data['nextSession']).isEmpty
-                              ? 'Non programmée'
-                              : _text(data['nextSession']);
+                      const _InfoBox(
+                        text: 'Aucun cours pour le moment. Clique sur Ajouter un cours.',
+                      )
+                    else
+                      ...courses.map((doc) {
+                        final data = doc.data();
+                        final title = _text(data['title']).isEmpty
+                            ? 'Cours sans titre'
+                            : _text(data['title']);
+                        final description = _text(data['description']).isEmpty
+                            ? 'Aucune description.'
+                            : _text(data['description']);
+                        final language = _text(data['language']).isEmpty
+                            ? 'Langue non définie'
+                            : _text(data['language']);
+                        final level = _text(data['level']).isEmpty
+                            ? 'Niveau non défini'
+                            : _text(data['level']);
+                        final status = _normalizeStatus(data['status']);
+                        final teacher = _text(data['teacherName']).isNotEmpty
+                            ? _text(data['teacherName'])
+                            : _text(data['teacherEmail']).isNotEmpty
+                                ? _text(data['teacherEmail'])
+                                : 'Prof non affecté';
+                        final nextSession = _text(data['nextSession']).isEmpty
+                            ? 'Non programmée'
+                            : _text(data['nextSession']);
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 24,
-                                      backgroundColor: AppColors.primarySoft,
-                                      child: Icon(
-                                        status == 'active'
-                                            ? Icons.menu_book_rounded
-                                            : Icons.archive_outlined,
-                                        color: AppColors.dark,
-                                      ),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: AppColors.primarySoft,
+                                    child: Icon(
+                                      status == 'active'
+                                          ? Icons.menu_book_rounded
+                                          : Icons.archive_outlined,
+                                      color: AppColors.dark,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            title,
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w900,
-                                              color: AppColors.dark,
-                                            ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          title,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.dark,
                                           ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            description,
-                                            style: const TextStyle(
-                                              color: AppColors.mutedText,
-                                              height: 1.4,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    _Badge(text: level),
-                                    _Badge(text: status == 'active' ? 'Actif' : status),
-                                    _Badge(text: teacher),
-                                    _Badge(text: nextSession),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        onPressed: () => _openCourseDialog(courseDoc: doc),
-                                        icon: const Icon(Icons.edit_rounded),
-                                        label: const Text('Modifier'),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        onPressed: () => _deleteCourse(doc),
-                                        icon: const Icon(Icons.delete_outline_rounded),
-                                        label: const Text('Supprimer'),
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: AppColors.danger,
                                         ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          description,
+                                          style: const TextStyle(
+                                            color: AppColors.mutedText,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _Badge(text: language),
+                                  _Badge(text: level),
+                                  _Badge(text: status == 'active' ? 'Actif' : status),
+                                  _Badge(text: teacher),
+                                  _Badge(text: nextSession),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _openCourseDialog(courseDoc: doc),
+                                      icon: const Icon(Icons.edit_rounded),
+                                      label: const Text('Modifier'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _deleteCourse(doc),
+                                      icon: const Icon(Icons.delete_outline_rounded),
+                                      label: const Text('Supprimer'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.danger,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),
@@ -528,4 +589,11 @@ String _normalizeStatus(dynamic status) {
   }
   if (value == 'actif') return 'active';
   return 'active';
+}
+
+String _teacherAssignmentLabel(Map<String, dynamic> data) {
+  final language = _text(data['assignedLanguage']);
+  final levels = AdminService.cleanStringList(data['assignedLevels']);
+  if (language.isEmpty && levels.isEmpty) return 'Aucune affectation';
+  return '${language.isEmpty ? 'Langue non définie' : language} ${levels.isEmpty ? '' : levels.join(', ')}'.trim();
 }

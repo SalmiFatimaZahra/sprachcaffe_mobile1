@@ -51,6 +51,11 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _createAccount() async {
+    if (widget.selectedRole != UserRole.student) {
+      _showMessage("Les comptes professeur et administrateur sont créés uniquement par l'admin.");
+      return;
+    }
+
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -167,7 +172,9 @@ class _RegisterPageState extends State<RegisterPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Créer un compte ${selectedRole.label.toLowerCase()}',
+                      selectedRole == UserRole.student
+                          ? 'Créer un compte étudiant'
+                          : "Création réservée à l'admin",
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         color: AppColors.dark,
@@ -187,7 +194,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'Le rôle reste séparé dès l’inscription pour t’éviter de refaire toute la navigation plus tard.',
+                'L’inscription publique est réservée aux étudiants. Les comptes professeur et administrateur sont créés par l’admin.',
                 style: TextStyle(
                   height: 1.5,
                   color: AppColors.mutedText,
