@@ -36,11 +36,19 @@ class StudentHomePage extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     String langue = "Français";
-    String horaire = "Matin";
+    String horaire = "En semaine";
     String mode = "Présentiel";
 
-    final langues = ["Français", "Anglais", "Espagnol", "Allemand", "Arabe", "Italien"];
-    final horaires = ["Matin", "Après-midi", "Soir", "Week-end"];
+    final langues = [
+      "Français",
+      "Anglais",
+      "Espagnol",
+      "Allemand",
+      "Arabe",
+      "Italien"
+    ];
+
+    final horaires = ["En semaine", "Week-end"];
 
     showModalBottomSheet(
       context: context,
@@ -62,16 +70,17 @@ class StudentHomePage extends StatelessWidget {
                     "Ajouter un cours",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-
                   const SizedBox(height: 20),
 
                   DropdownButtonFormField(
                     value: langue,
                     decoration: _input("Langue", Icons.language),
                     items: langues
-                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .map((e) =>
+                        DropdownMenuItem(value: e, child: Text(e)))
                         .toList(),
-                    onChanged: (v) => setState(() => langue = v.toString()),
+                    onChanged: (v) =>
+                        setState(() => langue = v.toString()),
                   ),
 
                   const SizedBox(height: 12),
@@ -80,9 +89,11 @@ class StudentHomePage extends StatelessWidget {
                     value: horaire,
                     decoration: _input("Horaire", Icons.schedule),
                     items: horaires
-                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .map((e) =>
+                        DropdownMenuItem(value: e, child: Text(e)))
                         .toList(),
-                    onChanged: (v) => setState(() => horaire = v.toString()),
+                    onChanged: (v) =>
+                        setState(() => horaire = v.toString()),
                   ),
 
                   const SizedBox(height: 12),
@@ -90,15 +101,17 @@ class StudentHomePage extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _modeBox("Présentiel", mode == "Présentiel", () {
-                          setState(() => mode = "Présentiel");
-                        }),
+                        child: _modeBox("Présentiel",
+                            mode == "Présentiel", () {
+                              setState(() => mode = "Présentiel");
+                            }),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _modeBox("En ligne", mode == "En ligne", () {
-                          setState(() => mode = "En ligne");
-                        }),
+                        child: _modeBox("En ligne",
+                            mode == "En ligne", () {
+                              setState(() => mode = "En ligne");
+                            }),
                       ),
                     ],
                   ),
@@ -109,11 +122,14 @@ class StudentHomePage extends StatelessWidget {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () async {
-                        final userRef =
-                        FirebaseFirestore.instance.collection("users").doc(uid);
+                        final userRef = FirebaseFirestore.instance
+                            .collection("users")
+                            .doc(uid);
 
-                        final courseId =
-                            FirebaseFirestore.instance.collection("courses").doc().id;
+                        final courseId = FirebaseFirestore.instance
+                            .collection("courses")
+                            .doc()
+                            .id;
 
                         final newCourse = {
                           "courseId": courseId,
@@ -158,7 +174,10 @@ class StudentHomePage extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection("users").doc(uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
+          .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(
@@ -166,10 +185,12 @@ class StudentHomePage extends StatelessWidget {
           );
         }
 
-        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final data =
+            snapshot.data!.data() as Map<String, dynamic>? ?? {};
 
         final courses = List<Map<String, dynamic>>.from(
-          (data["cours"] ?? []).map((e) => Map<String, dynamic>.from(e)),
+          (data["cours"] ?? [])
+              .map((e) => Map<String, dynamic>.from(e)),
         );
 
         final fullName =
@@ -205,14 +226,15 @@ class StudentHomePage extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                if (courses.isEmpty)
-                  const Text("Aucun cours"),
+                if (courses.isEmpty) const Text("Aucun cours"),
 
                 ...courses.map((cours) {
                   final bool paid = cours["paid"] == true;
-                  final bool testCompleted = cours["testCompleted"] == true;
+                  final bool testCompleted =
+                      cours["testCompleted"] == true;
                   final String courseId = cours["courseId"] ?? "";
-                  final String langue = cours["langue"] ?? "Français";
+                  final String langue =
+                      cours["langue"] ?? "Français";
 
                   String badge;
                   IconData icon;
@@ -238,8 +260,14 @@ class StudentHomePage extends StatelessWidget {
                       subtitle: testCompleted
                           ? "${cours["niveau"]} • ${cours["mode"]}"
                           : "Niveau à déterminer • ${cours["mode"]}",
+
                       badge: badge,
-                      schedule: cours["horaire"] ?? "",
+
+                      // ✅ FIX ICI
+                      schedule: (cours["horaire"] == "Week-end")
+                          ? "Week-end"
+                          : "En semaine",
+
                       icon: icon,
                       onTap: () {
                         if (!paid) {
@@ -257,7 +285,7 @@ class StudentHomePage extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => StudentLevelTestPage(
-                                language: langue, // ✅ IMPORTANT FIX ICI
+                                language: langue,
                               ),
                             ),
                           );
@@ -281,7 +309,9 @@ class StudentHomePage extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
     );
   }
 
