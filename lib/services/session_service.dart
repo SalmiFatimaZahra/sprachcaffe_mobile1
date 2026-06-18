@@ -38,13 +38,13 @@ class SessionService {
     await _sessionsCollection.add({
       'courseId': courseId,
       'courseTitle': courseTitle,
-      'groupName': groupName,
+      'groupName': groupName, // ✅ IMPORTANT
       'date': date,
       'time': time,
       'room': room,
-      'status': 'upcoming',
       'teacherId': user.uid,
       'teacherEmail': user.email,
+      'status': 'upcoming',
       'createdAt': FieldValue.serverTimestamp(),
     });
   }

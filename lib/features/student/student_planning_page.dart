@@ -13,102 +13,128 @@ class StudentPlanningPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    final stream = FirebaseFirestore.instance
-        .collection("sessions")
-        .where("studentId", isEqualTo: uid)
+    final userStream = FirebaseFirestore.instance
+        .collection("users")
+        .doc(uid)
         .snapshots();
 
     return Scaffold(
-      body: StreamBuilder<QuerySnapshot>(
-        stream: stream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: userStream,
+        builder: (context, userSnap) {
+          if (userSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError) {
-            return const Center(child: Text("Erreur de chargement"));
+          if (!userSnap.hasData || !userSnap.data!.exists) {
+            return const Center(child: Text("Utilisateur introuvable"));
           }
 
-          final sessions = snapshot.data?.docs ?? [];
+          final userData =
+              userSnap.data!.data() as Map<String, dynamic>? ?? {};
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const PremiumHeader(
-                  badge: 'Planning',
-                  title: 'Mon agenda de formation',
-                  subtitle:
-                  'Une vue claire des séances, ateliers et rendez-vous à venir.',
-                  icon: Icons.calendar_month_rounded,
-                ),
+          final groupName = userData["groupName"] ?? "";
 
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SectionTitle('Cette semaine'),
-                      const SizedBox(height: 14),
+          if (groupName.isEmpty) {
+            return const Center(
+              child: Text("Aucun groupe assigné à cet utilisateur"),
+            );
+          }
 
-                      if (sessions.isEmpty)
-                        const Text("Aucune session planifiée"),
+          final sessionsStream = FirebaseFirestore.instance
+              .collection("sessions")
+              .where("groupName", isEqualTo: groupName)
+              .snapshots();
 
-                      ...sessions.map((doc) {
-                        final data =
-                        doc.data() as Map<String, dynamic>;
+          return StreamBuilder<QuerySnapshot>(
+            stream: sessionsStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _PlanningTile(
-                            day: data["day"] ?? "-",
-                            hour: data["hour"] ?? "-",
-                            title: data["title"] ?? "-",
-                            location: data["location"] ?? "-",
+              if (snapshot.hasError) {
+                return const Center(child: Text("Erreur de chargement"));
+              }
+
+              final sessions = snapshot.data?.docs ?? [];
+
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const PremiumHeader(
+                      badge: 'Planning',
+                      title: 'Mon agenda de formation',
+                      subtitle:
+                      'Une vue claire des séances, ateliers et rendez-vous à venir.',
+                      icon: Icons.calendar_month_rounded,
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SectionTitle('Cette semaine'),
+                          const SizedBox(height: 14),
+
+                          if (sessions.isEmpty)
+                            const Text("Aucune session planifiée"),
+
+                          ...sessions.map((doc) {
+                            final data =
+                            doc.data() as Map<String, dynamic>;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _PlanningTile(
+                                day: data["date"] ?? "-",
+                                hour: data["time"] ?? "-",
+                                title: data["courseTitle"] ?? "-",
+                                location: data["room"] ?? "-",
+                              ),
+                            );
+                          }),
+
+                          const SizedBox(height: 28),
+
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection("users")
+                                .doc(uid)
+                                .snapshots(),
+                            builder: (context, userSnap2) {
+                              if (!userSnap2.hasData) {
+                                return const SizedBox();
+                              }
+
+                              final data =
+                                  userSnap2.data!.data()
+                                  as Map<String, dynamic>? ??
+                                      {};
+
+                              final testCompleted =
+                                  data["testCompleted"] == true;
+
+                              if (testCompleted) {
+                                return const SizedBox();
+                              }
+
+                              return const _ReminderCard(
+                                title: 'Test de niveau',
+                                subtitle:
+                                'À compléter pour activer ton parcours',
+                                icon: Icons.quiz_rounded,
+                              );
+                            },
                           ),
-                        );
-                      }),
-
-                      const SizedBox(height: 28),
-
-                      const SizedBox(height: 14),
-
-                      StreamBuilder<DocumentSnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection("users")
-                            .doc(uid)
-                            .snapshots(),
-                        builder: (context, userSnap) {
-                          if (!userSnap.hasData) {
-                            return const SizedBox();
-                          }
-
-                          final data =
-                              userSnap.data!.data()
-                              as Map<String, dynamic>? ??
-                                  {};
-
-                          final testCompleted =
-                              data["testCompleted"] == true;
-
-                          return Column(
-                            children: [
-                              if (!testCompleted)
-                                const _ReminderCard(
-                                  title: 'Test de niveau',
-                                  subtitle:
-                                  'À compléter pour activer ton parcours',
-                                  icon: Icons.quiz_rounded,
-                                ),
-                            ],
-                          );
-                        },
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
