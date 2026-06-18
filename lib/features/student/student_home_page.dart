@@ -263,7 +263,7 @@ class StudentHomePage extends StatelessWidget {
 
                       badge: badge,
 
-                      // ✅ FIX ICI
+
                       schedule: (cours["horaire"] == "Week-end")
                           ? "Week-end"
                           : "En semaine",
